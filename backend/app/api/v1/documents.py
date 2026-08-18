@@ -1,5 +1,5 @@
 """
-AegisRAG — Endpoints de gestión de documentos.
+MAIS_IA — Endpoints de gestión de documentos.
 
 Provee los endpoints para subir documentos PDF y consultar
 su estado de procesamiento. La ingestión real se delega

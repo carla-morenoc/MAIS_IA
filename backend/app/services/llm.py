@@ -1,5 +1,5 @@
 """
-AegisRAG — Servicio LLM centralizado.
+MAIS_IA — Servicio LLM centralizado.
 
 Soporta:
 1. OpenAI (Cloud comercial)
@@ -210,7 +210,7 @@ class LLMService:
         answer_parts = []
         if "implement" in prompt.lower() or "what" in prompt.lower():
             answer_parts.append(
-                f"De acuerdo a la documentación, AegisRAG implementa Búsqueda Híbrida y Re-Ranking "
+                f"De acuerdo a la documentación, MAIS_IA implementa Búsqueda Híbrida y Re-Ranking "
                 f"junto con un sistema de Ingestión Asíncrona [{files_found[0][0]}, pág. {files_found[0][1]}]."
             )
             if len(files_found) > 1:

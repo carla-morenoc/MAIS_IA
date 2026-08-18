@@ -1,5 +1,5 @@
 """
-AegisRAG — Entrypoint principal de FastAPI.
+MAIS_IA — Entrypoint principal de FastAPI.
 
 Configura la instancia de la aplicación con:
 - Middleware CORS para el frontend Next.js
@@ -77,7 +77,7 @@ app = FastAPI(
     title=settings.api_title,
     version=settings.api_version,
     description=(
-        "AegisRAG — Sistema empresarial de Corrective RAG "
+        "MAIS_IA — Sistema empresarial de Corrective RAG "
         "con búsqueda híbrida, re-ranking e ingestión asíncrona."
     ),
     lifespan=lifespan,

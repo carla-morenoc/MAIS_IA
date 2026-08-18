@@ -1,5 +1,5 @@
 """
-AegisRAG — Cliente async de Redis.
+MAIS_IA — Cliente async de Redis.
 
 Provee un pool de conexiones Redis para uso como broker de Celery,
 caché de resultados intermedios y pub/sub para WebSockets.

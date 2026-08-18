@@ -1,5 +1,5 @@
 """
-AegisRAG — Servicio de Re-Ranking.
+MAIS_IA — Servicio de Re-Ranking.
 
 Usa un modelo local Cross-Encoder (vía FastEmbed) para evaluar la
 relevancia de los fragmentos recuperados en relación a la consulta.

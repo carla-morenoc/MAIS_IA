@@ -1,5 +1,5 @@
 """
-AegisRAG — Cliente de Qdrant (base de datos vectorial).
+MAIS_IA — Cliente de Qdrant (base de datos vectorial).
 
 Gestiona la conexión al servidor Qdrant para operaciones de
 búsqueda densa (embeddings) y esparsa (sparse vectors).

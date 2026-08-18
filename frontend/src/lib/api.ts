@@ -1,5 +1,5 @@
 // ============================================================
-// AegisRAG — Cliente API Frontend
+// MAIS_IA — Cliente API Frontend
 // Interacciones HTTP asíncronas con el backend en puerto 8000
 // ============================================================
 

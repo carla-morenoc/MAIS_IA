@@ -1,5 +1,5 @@
 """
-AegisRAG — Configuración centralizada del backend.
+MAIS_IA — Configuración centralizada del backend.
 
 Usa pydantic-settings para cargar variables de entorno desde .env
 con validación automática de tipos y valores por defecto seguros.
@@ -14,7 +14,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Configuración global de la aplicación AegisRAG."""
+    """Configuración global de la aplicación MAIS_IA."""
 
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),
@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     )
 
     # ── API ────────────────────────────────────────────────
-    api_title: str = "AegisRAG"
+    api_title: str = "MAIS_IA"
     api_version: str = "0.1.0"
     api_debug: bool = False
     cors_origins: list[str] = [
@@ -33,9 +33,9 @@ class Settings(BaseSettings):
     ]
 
     # ── PostgreSQL ─────────────────────────────────────────
-    postgres_user: str = "aegisrag"
-    postgres_password: str = "aegisrag_secret"
-    postgres_db: str = "aegisrag"
+    postgres_user: str = "MAIS_IA"
+    postgres_password: str = "MAIS_IA_secret"
+    postgres_db: str = "MAIS_IA"
     postgres_host: str = "localhost"
     postgres_port: int = 5432
 

@@ -12,7 +12,7 @@
 </p>
 
 ## Overview
-AegisRAG is a production-grade, full-stack Corrective Retrieval-Augmented Generation (CRAG) system designed to mitigate hallucination and context irrelevance in LLM applications. Built on a decoupled microservices architecture, it orchestrates hybrid vector-lexical queries, context re-ranking, and dynamic self-correction loops to ensure accurate, verified context feeds generation.
+MAIS_IA is a production-grade, full-stack Corrective Retrieval-Augmented Generation (CRAG) system designed to mitigate hallucination and context irrelevance in LLM applications. Built on a decoupled microservices architecture, it orchestrates hybrid vector-lexical queries, context re-ranking, and dynamic self-correction loops to ensure accurate, verified context feeds generation.
 
 ## Tech Stack
 *   **Backend:** Python 3.11+, FastAPI (ASGI Framework), Celery (Distributed Task Queue), SQLAlchemy 2.0 (Async ORM), FastEmbed (Local Embeddings & Reranking), PyPDF (Document Parsing).
@@ -37,8 +37,8 @@ AegisRAG is a production-grade, full-stack Corrective Retrieval-Augmented Genera
 ## Installation & Setup
 1.  **Clone the Repository:**
     ```bash
-    git clone https://github.com/RobertoRoloG/AegisRAG.git
-    cd AegisRAG
+    git clone https://github.com/RobertoRoloG/MAIS_IA.git
+    cd MAIS_IA
     ```
 
 2.  **Configure Environment Variables:**

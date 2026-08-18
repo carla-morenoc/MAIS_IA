@@ -1,5 +1,5 @@
 """
-AegisRAG — Tarea de ingestión asíncrona de documentos PDF.
+MAIS_IA — Tarea de ingestión asíncrona de documentos PDF.
 
 Pipeline optimizado ejecutado por el worker Celery:
 1. Marca el documento como PROCESSING en PostgreSQL
@@ -112,7 +112,7 @@ def _extract_pdf_pages_safe(file_path: str) -> tuple[list[tuple[int, str]], list
 
 
 @celery_app.task(
-    name="aegisrag.process_pdf",
+    name="MAIS_IA.process_pdf",
     bind=True,
     max_retries=3,
     default_retry_delay=10,

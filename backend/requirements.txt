@@ -1,5 +1,5 @@
 # ============================================================
-# AegisRAG — Dependencias Python (Fase 1)
+# MAIS_IA — Dependencias Python (Fase 1)
 # Pinneadas a versiones mayores para estabilidad.
 # ============================================================
 

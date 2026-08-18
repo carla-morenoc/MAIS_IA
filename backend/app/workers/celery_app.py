@@ -1,5 +1,5 @@
 """
-AegisRAG — Configuración de la instancia Celery.
+MAIS_IA — Configuración de la instancia Celery.
 
 Define la aplicación Celery conectada a Redis como broker y backend.
 Los workers se lanzan con:
@@ -14,7 +14,7 @@ settings = get_settings()
 
 # Instancia Celery con Redis como broker (cola de tareas) y backend (resultados)
 celery_app = Celery(
-    "aegisrag",
+    "MAIS_IA",
     broker=settings.redis_url,
     backend=settings.redis_url,
 )

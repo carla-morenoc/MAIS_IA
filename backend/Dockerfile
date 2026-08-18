@@ -1,5 +1,5 @@
 # ============================================================
-# AegisRAG — Dockerfile del Backend
+# MAIS_IA — Dockerfile del Backend
 # Multi-stage build optimizado para producción.
 # ============================================================
 

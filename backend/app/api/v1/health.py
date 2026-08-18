@@ -1,5 +1,5 @@
 """
-AegisRAG — Endpoint de Health Check.
+MAIS_IA — Endpoint de Health Check.
 
 Verifica la conectividad con los tres servicios de infraestructura:
 - PostgreSQL: ejecuta SELECT 1

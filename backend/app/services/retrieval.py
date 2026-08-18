@@ -1,5 +1,5 @@
 """
-AegisRAG — Servicio de Búsqueda Híbrida y Recuperación.
+MAIS_IA — Servicio de Búsqueda Híbrida y Recuperación.
 
 Ejecuta búsquedas combinadas (densa + esparsa) en Qdrant
 y aplica Reciprocal Rank Fusion (RRF) de forma nativa en la base de datos

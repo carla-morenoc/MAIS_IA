@@ -1,5 +1,5 @@
 """
-AegisRAG — Servicio de Vector Store (Qdrant + Embeddings Híbridos).
+MAIS_IA — Servicio de Vector Store (Qdrant + Embeddings Híbridos).
 
 Gestiona la colección de vectores en Qdrant (búsqueda híbrida: densa + esparsa)
 y la generación de embeddings locales usando FastEmbed.

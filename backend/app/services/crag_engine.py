@@ -1,5 +1,5 @@
 """
-AegisRAG — Motor Grafo Corrective RAG (CRAG).
+MAIS_IA — Motor Grafo Corrective RAG (CRAG).
 
 Implementa la máquina de estados de CRAG de forma asíncrona:
 - RETRIEVE: Recuperación híbrida + Re-Ranking.
@@ -174,7 +174,7 @@ class CRAGEngine:
             context_str = "\n---\n".join(context_blocks)
 
             system_prompt = (
-                "Eres AegisRAG, un asistente de investigación preciso.\n\n"
+                "Eres MAIS_IA, un asistente de investigación preciso.\n\n"
                 "REGLAS EStrictAS DE FORMATO Y CITACIÓN:\n"
                 "1. CITAS INLINE EN CADA PÁRRAFO: Cada párrafo o dato de tu respuesta DEBE incluir obligatoriamente su cita [nombre_archivo.pdf, pág. X] intercalada al final de la oración/párrafo.\n"
                 "2. SIN SECCIÓN SEPARADA DE REFERENCIAS: Queda prohibido crear listas finales de 'Referencias', 'Fuentes' o 'Bibliografía' al final del mensaje.\n"

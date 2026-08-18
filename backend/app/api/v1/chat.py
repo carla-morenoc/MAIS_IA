@@ -1,5 +1,5 @@
 """
-AegisRAG — Controlador de Chat y Consultas.
+MAIS_IA — Controlador de Chat y Consultas.
 
 Expone el endpoint POST /api/v1/chat/query para interactuar
 con el motor de Corrective RAG (CRAG) e iniciar búsquedas

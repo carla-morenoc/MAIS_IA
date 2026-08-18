@@ -1,5 +1,5 @@
 """
-AegisRAG — Modelos SQLAlchemy para PostgreSQL.
+MAIS_IA — Modelos SQLAlchemy para PostgreSQL.
 
 Define las tablas del sistema. En esta fase:
 - Document: rastreo del ciclo de vida de archivos subidos

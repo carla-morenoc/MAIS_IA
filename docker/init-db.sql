@@ -1,5 +1,5 @@
 -- ============================================================
--- AegisRAG — Inicialización de PostgreSQL
+-- MAIS_IA — Inicialización de PostgreSQL
 -- Se ejecuta automáticamente en el primer arranque del contenedor.
 -- ============================================================
 
