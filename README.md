@@ -1,4 +1,4 @@
-<h1 align="center">AegisRAG</h1>
+<h1 align="center">MAIS_IA</h1>
 
 <p align="center">
   <img src="https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI" />
