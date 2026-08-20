@@ -1,128 +1,60 @@
-<h1 align="center">MAIS_IA</h1>
+# MAIS_IA - Asistente RAG con Personalidad de Maisito
 
-<p align="center">
-  <img src="https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI" />
-  <img src="https://img.shields.io/badge/Next.js-000000?style=flat-square&logo=nextdotjs&logoColor=white" alt="Next.js" />
-  <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
-  <img src="https://img.shields.io/badge/Celery-356C40?style=flat-square&logo=celery&logoColor=white" alt="Celery" />
-  <img src="https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL" />
-  <img src="https://img.shields.io/badge/Qdrant-FF4154?style=flat-square&logo=qdrant&logoColor=white" alt="Qdrant" />
-  <img src="https://img.shields.io/badge/Redis-DC382D?style=flat-square&logo=redis&logoColor=white" alt="Redis" />
-  <img src="https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker" />
-</p>
+Este es el backend y el panel de control local del asistente inteligente RAG (Retrieval-Augmented Generation) para el manual de **MAIS**.
 
-## Overview
-MAIS_IA is a production-grade, full-stack Corrective Retrieval-Augmented Generation (CRAG) system designed to mitigate hallucination and context irrelevance in LLM applications. Built on a decoupled microservices architecture, it orchestrates hybrid vector-lexical queries, context re-ranking, and dynamic self-correction loops to ensure accurate, verified context feeds generation.
+El sistema procesa y segmenta documentos en PDF en un almacén de vectores local (Qdrant), calcula las similitudes híbridas (semántica y por palabras clave), reordena los fragmentos y utiliza un LLM externo (Groq) con la personalidad de **Maisito** para resolver consultas directamente.
 
-## Tech Stack
-*   **Backend:** Python 3.11+, FastAPI (ASGI Framework), Celery (Distributed Task Queue), SQLAlchemy 2.0 (Async ORM), FastEmbed (Local Embeddings & Reranking), PyPDF (Document Parsing).
-*   **Frontend:** Next.js 16 (App Router), TypeScript, React 19, Tailwind CSS 4, Lucide React.
-*   **Databases & Caches:** PostgreSQL 16 (Relational Metadata & History), Qdrant v1.18.2 (Vector Database supporting dense/sparse hybrid search), Redis 7 (Asynchronous Message Broker & Cache).
-*   **Infrastructure & Deployment:** Docker, Docker Compose.
+---
 
-## Key Features
-*   **Corrective RAG (CRAG) Pipeline:** Self-corrective pipeline with automated query rewriting and dynamic relevance thresholding (default `0.35` Cross-Encoder score) to filter out hallucinated context.
-*   **Hybrid Semantic-Lexical Search:** Combines dense vectors (embedding-based search) and sparse vectors (BM25 keyword search) natively within Qdrant.
-*   **Two-Stage Retrieval & Re-ranking:** Integrates a second-pass context optimization layer powered by `BAAI/bge-reranker-base`.
-*   **Asynchronous Ingestion Queue:** Decoupled document processing (PDF parsing and chunking) using Celery background workers to keep API endpoints non-blocking.
-*   **Multi-LLM Integration:** Pluggable support for local LLMs via Ollama (e.g., Llama 3) or commercial APIs including OpenAI and Groq.
-*   **Session & History Tracking:** Persistent relational storage for chat sessions, message histories, and extraction metadata.
+## 🛠️ Arquitectura y Tecnologías
+* **Motor Backend:** Python 3.14+ (FastAPI).
+* **Base de Datos Vectorial:** Qdrant (almacén de embeddings densos y esparsos).
+* **Cola de Ingesta Asíncrona:** Celery (con Redis como broker de mensajes).
+* **Base de Datos Relacional:** PostgreSQL (historial y metadatos).
+* **Controlador de Túnel:** Ngrok (para exponer el servidor local a internet).
 
-## Prerequisites
-*   **OS:** Linux, macOS, or Windows (WSL 2 or PowerShell recommended)
-*   **Python:** `v3.11` or higher
-*   **Node.js:** `v20.x` or higher (with `npm` package manager)
-*   **Docker:** Engine `v20.10+` and Docker Compose `v2.0+`
+---
 
-## Installation & Setup
-1.  **Clone the Repository:**
-    ```bash
-    git clone https://github.com/RobertoRoloG/MAIS_IA.git
-    cd MAIS_IA
-    ```
+## 🚀 Requisitos para Servidor Local (Otro Ordenador)
+Si quieres empaquetar esta carpeta y pasarla a otro ordenador para que haga la función de "Servidor Local" conectado a la web de OVH, ese ordenador debe tener instalado:
 
-2.  **Configure Environment Variables:**
-    Copy the template file to `.env` and adjust the configuration as required:
-    ```bash
-    cp .env.example .env
-    ```
-    The main environment variables defined in `.env` are:
-    *   `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`: PostgreSQL credentials.
-    *   `POSTGRES_PORT`: PostgreSQL host port (default `5433`).
-    *   `QDRANT_PORT` / `QDRANT_GRPC_PORT`: Qdrant host ports (default `6333`/`6334`).
-    *   `REDIS_PORT` / `REDIS_URL`: Redis configuration.
-    *   `LLM_PROVIDER`: Pluggable LLM provider (`ollama`, `groq`, or `openai`).
-    *   `LLM_MODEL`: Target model (e.g., `llama-3.1-8b-instant`, `llama3`).
-    *   `GROQ_API_KEY` / `OPENAI_API_KEY`: API keys for cloud model providers.
-    *   `CRAG_RELEVANCE_THRESHOLD`: Document evaluation relevance score threshold (default `0.35`).
+1. **Docker Desktop** (para levantar las bases de datos).
+2. **Python 3.14+** (instalado de forma global en Windows).
+3. **Node.js y npm** (para compilar y ejecutar el frontend local de subida de archivos).
+4. **Túnel Ngrok** (el token de autenticación configurado).
 
-3.  **Start Services (Infrastructure Stack):**
-    Spin up PostgreSQL, Qdrant, and Redis containers:
-    ```bash
-    docker compose up -d
-    ```
+---
 
-4.  **Set Up Backend (FastAPI & Celery):**
-    Initialize a virtual environment, activate it, and install Python dependencies:
-    ```bash
-    cd backend
-    python -m venv .venv
-    
-    # Windows (PowerShell):
-    .venv\Scripts\Activate.ps1
-    # Linux / macOS:
-    source .venv/bin/activate
+## 📋 Pasos de Instalación en el Nuevo Ordenador
 
-    pip install --upgrade pip
-    pip install -r requirements.txt
-    ```
+### Paso 1: Copiar la carpeta y el archivo `.env`
+Copia la carpeta entera `MAIS_IA` al nuevo equipo. 
+> [!IMPORTANT]  
+> Asegúrate de copiar manualmente el archivo `.env` de la carpeta `backend/` (ya que Git lo ignora por motivos de seguridad y no se descargará de GitHub). Debe contener tu API Key de Groq y la configuración de puertos:
+> ```env
+> POSTGRES_PORT=5433
+> REDIS_PORT=6380
+> CORS_ORIGINS=["http://localhost:3000", "http://localhost:8000", "https://maisformacion.com"]
+> GROQ_API_KEY=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
+> ```
 
-5.  **Set Up Frontend (Next.js):**
-    Install client node packages:
-    ```bash
-    cd ../frontend
-    npm install
-    ```
+### Paso 2: Descargar e Instalar Ngrok
+1. Descarga Ngrok para Windows desde la web oficial.
+2. Descomprímelo y mete el archivo `ngrok.exe` dentro de la carpeta oculta `C:\Users\usuario\AppData\Local\ngrok\ngrok.exe` (o modifica el archivo `start_mais_ia.bat` para apuntar a la ruta donde lo pongas).
+3. Registra el authtoken de tu cuenta de Ngrok ejecutando:
+   ```cmd
+   C:\Users\usuario\AppData\Local\ngrok\ngrok.exe config add-authtoken <TU_TOKEN>
+   ```
 
-## Usage / Execution
-1.  **Verify Service Infrastructure:**
-    Ensure database, vector store, and broker containers are healthy:
-    ```bash
-    docker compose ps
-    ```
+### Paso 3: Arrancar los servicios
+1. Abre **Docker Desktop**.
+2. Ejecuta el archivo **`start_mais_ia.bat`** haciendo doble clic.
+3. Se abrirán 4 terminales ejecutando las bases de datos (Postgres, Redis, Qdrant), Celery, FastAPI, el panel de Next.js y el túnel de Ngrok.
 
-2.  **Run Backend API Server:**
-    From the `backend` directory, activate the virtual environment and launch Uvicorn:
-    ```bash
-    cd backend
-    # Activate virtual environment if not done already
-    uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-    ```
+---
 
-3.  **Run Celery Ingestion Worker:**
-    In a separate terminal session, navigate to the `backend` directory, activate the virtual environment, and run:
-    ```bash
-    # Windows (PowerShell):
-    .venv\Scripts\celery.exe -A app.workers.celery_app worker --loglevel=info --pool=solo
-    # Linux / macOS:
-    celery -A app.workers.celery_app worker --loglevel=info
-    ```
-
-4.  **Run Frontend Client:**
-    From the `frontend` directory, start the Next.js development server:
-    ```bash
-    cd frontend
-    npm run dev
-    ```
-
-5.  **Access Main Endpoints:**
-    *   **Frontend UI:** [http://localhost:3000](http://localhost:3000)
-    *   **Swagger API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
-    *   **Backend Health Check:** [http://localhost:8000/api/v1/health](http://localhost:8000/api/v1/health)
-
-## Roadmap
-- [ ] Add support for additional file formats (`.docx`, `.md`, `.txt`, `.html`).
-- [ ] Implement Server-Sent Events (SSE) for streaming model generation.
-- [ ] Integrate JWT authentication and Role-Based Access Control (RBAC).
-- [ ] Optimize Docker configuration using multi-stage production builds.
-- [ ] Integrate retrieval evaluation frameworks (Ragas / TruLens) to monitor retrieval quality.
+## 💻 Panel de Ingesta (http://localhost:3000)
+Una vez arrancado, entra en [http://localhost:3000](http://localhost:3000) en el ordenador servidor:
+* Desde aquí podrás **arrastrar y subir los manuales en PDF** (ej: `ALBARAN_A_FACTURA.pdf`).
+* Celery procesará el PDF en segundo plano y lo guardará en la base de datos de vectores.
+* En cuanto ponga "Completado", el chat de la web de OVH ya tendrá conocimiento de ese archivo.
