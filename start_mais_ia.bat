@@ -5,15 +5,15 @@ echo Levantando contenedores Docker...
 docker compose up -d
 
 echo Iniciando worker de Celery...
-start "MAIS_IA Celery" cmd /k "cd backend && C:\Users\usuario\AppData\Local\Python\pythoncore-3.14-64\python.exe -m celery -A app.workers.celery_app worker --loglevel=info --pool=solo"
+start "MAIS_IA Celery" cmd /k "cd backend && %USERPROFILE%\AppData\Local\Python\pythoncore-3.14-64\python.exe -m celery -A app.workers.celery_app worker --loglevel=info --pool=solo"
 
 echo Iniciando servidor Backend (FastAPI)...
-start "MAIS_IA Backend" cmd /k "cd backend && C:\Users\usuario\AppData\Local\Python\pythoncore-3.14-64\python.exe -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+start "MAIS_IA Backend" cmd /k "cd backend && %USERPROFILE%\AppData\Local\Python\pythoncore-3.14-64\python.exe -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
 
 echo Iniciando Frontend (Next.js)...
 start "MAIS_IA Frontend" cmd /k "cd frontend && npm run dev"
 
 echo Iniciando Tunel Seguro (Ngrok)...
-start "MAIS_IA Tunnel" cmd /k "C:\Users\usuario\AppData\Local\ngrok\ngrok.exe http 8000 --domain=footing-jellied-glamorous.ngrok-free.dev"
+start "MAIS_IA Tunnel" cmd /k "%USERPROFILE%\AppData\Local\ngrok\ngrok.exe http 8000 --domain=footing-jellied-glamorous.ngrok-free.dev"
 
 echo Todos los servicios han sido iniciados.
