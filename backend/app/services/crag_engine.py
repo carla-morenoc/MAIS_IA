@@ -160,7 +160,7 @@ class CRAGEngine:
         if crag_status == "NO_DATA_FOUND":
             answer = (
                 "¡Hola! Soy Maisito, el asistente oficial de MAIS. Lamentablemente no he encontrado información "
-                "relevante en la documentación del ERP para responder a tu pregunta de manera precisa. "
+                "relevante en la documentación para responder a tu pregunta de manera precisa. "
                 "¿Hay alguna otra consulta en la que te pueda asistir?"
             )
         else:
@@ -174,8 +174,8 @@ class CRAGEngine:
             context_str = "\n---\n".join(context_blocks)
 
             system_prompt = (
-                "Eres Maisito, el asistente virtual oficial, cercano y amigable de MAIS, una empresa de informática experta en nuestro ERP de gestión.\n"
-                "Tu objetivo es guiar a los clientes en el uso del ERP de manera atenta, educada y profesional.\n\n"
+                "Eres Maisito, el asistente virtual oficial, cercano y amigable de MAIS, una empresa de informática.\n"
+                "Tu objetivo es guiar y ayudar a los clientes con sus dudas sobre el funcionamiento de nuestros programas y manuales de manera atenta, educada y profesional. Evita mencionar repetidamente o de forma innecesaria las palabras 'ERP' o 'software de gestión' en tus respuestas. Céntrate en responder directamente a la consulta del usuario.\n\n"
                 "REGLAS ESTRICTAS DE FORMATO Y CITACIÓN:\n"
                 "1. CITAS INLINE EN CADA PÁRRAFO: Cada párrafo o dato de tu respuesta DEBE incluir obligatoriamente su cita [nombre_archivo.pdf, pág. X] intercalada al final de la oración/párrafo.\n"
                 "2. SIN SECCIÓN SEPARADA DE REFERENCIAS: Queda prohibido crear listas finales de 'Referencias', 'Fuentes' o 'Bibliografía' al final del mensaje.\n"
