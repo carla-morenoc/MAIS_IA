@@ -9,14 +9,26 @@ if exist "%~dp0backend\.env" (
     )
 )
 
+:: Detectar la ruta de Python (Entorno virtual local vs Python global del sistema)
+set "PYTHON_PATH=python"
+if exist "%~dp0backend\.venv\Scripts\python.exe" (
+    echo Entorno virtual local (.venv) detectado.
+    set "PYTHON_PATH=%~dp0backend\.venv\Scripts\python.exe"
+) else if exist "%USERPROFILE%\AppData\Local\Python\pythoncore-3.14-64\python.exe" (
+    echo Python global del sistema detectado en AppData.
+    set "PYTHON_PATH=%USERPROFILE%\AppData\Local\Python\pythoncore-3.14-64\python.exe"
+) else (
+    echo Intentando usar comando 'python' del sistema...
+)
+
 echo Levantando contenedores Docker...
 docker compose up -d
 
 echo Iniciando worker de Celery...
-start "MAIS_IA Celery" cmd /k "cd backend && .venv\Scripts\python.exe -m celery -A app.workers.celery_app worker --loglevel=info --pool=solo"
+start "MAIS_IA Celery" cmd /k "cd backend && "%PYTHON_PATH%" -m celery -A app.workers.celery_app worker --loglevel=info --pool=solo"
 
 echo Iniciando servidor Backend (FastAPI)...
-start "MAIS_IA Backend" cmd /k "cd backend && .venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+start "MAIS_IA Backend" cmd /k "cd backend && "%PYTHON_PATH%" -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
 
 echo Iniciando Frontend (Next.js)...
 start "MAIS_IA Frontend" cmd /k "cd frontend && npm run dev"
