@@ -1,14 +1,14 @@
-# MAIS_IA - Asistente RAG con Personalidad de Maisito
+# MAIS_IA - Asistente RAG con Personalidad de Maisito (Pack Portable)
 
 Este es el backend y el panel de control local del asistente inteligente RAG (Retrieval-Augmented Generation) para el manual de **MAIS**.
 
-El sistema procesa y segmenta documentos en PDF en un almacén de vectores local (Qdrant), calcula las similitudes híbridas (semántica y por palabras clave), reordena los fragmentos y utiliza un LLM externo (Groq) con la personalidad de **Maisito** para resolver consultas directamente.
+El sistema es completamente **portable** y dinámico. Al utilizar rutas relativas, puedes mover esta carpeta completa a cualquier ordenador y funcionará sin tener que alterar las configuraciones internas de Windows.
 
 ---
 
 ## 🛠️ Arquitectura y Tecnologías
 * **Motor Backend:** Python 3.14+ (FastAPI).
-* **Base de Datos Vectorial:** Qdrant (almacén de embeddings densos y esparsos).
+* **Base de Datos Vectorial:** Qdrant (almacén de embeddings semánticos y por palabras clave).
 * **Cola de Ingesta Asíncrona:** Celery (con Redis como broker de mensajes).
 * **Base de Datos Relacional:** PostgreSQL (historial y metadatos).
 * **Controlador de Túnel:** Ngrok (para exponer el servidor local a internet).
@@ -16,21 +16,20 @@ El sistema procesa y segmenta documentos en PDF en un almacén de vectores local
 ---
 
 ## 🚀 Requisitos para Servidor Local (Otro Ordenador)
-Si quieres empaquetar esta carpeta y pasarla a otro ordenador para que haga la función de "Servidor Local" conectado a la web de OVH, ese ordenador debe tener instalado:
+Si quieres copiar este proyecto a otro ordenador (por ejemplo, mediante un pendrive) para que actúe como servidor local conectado a la web de OVH, ese ordenador debe tener instalado previamente:
 
-1. **Docker Desktop** (para levantar las bases de datos).
+1. **Docker Desktop** (para arrancar las bases de datos).
 2. **Python 3.14+** (instalado de forma global en Windows, marcando la opción *"Add python.exe to PATH"* en el instalador).
 3. **Node.js y npm** (para compilar y ejecutar el frontend local de subida de archivos).
-4. **Túnel Ngrok** (el token de autenticación configurado).
 
 ---
 
-## 📋 Pasos de Instalación en el Nuevo Ordenador
+## 📋 Pasos de Configuración en el Nuevo Ordenador
 
 ### Paso 1: Copiar la carpeta y el archivo `.env`
-Copia la carpeta entera `MAIS_IA` al escritorio del nuevo equipo. 
+Copia la carpeta entera `MAIS_IA` al disco local del nuevo ordenador (se recomienda el Escritorio para mayor velocidad).
 > [!IMPORTANT]  
-> Asegúrate de copiar manualmente el archivo `.env` de la carpeta `backend/` (ya que Git lo ignora por motivos de seguridad y no se descargará de GitHub). Debe contener tu API Key de Groq y la configuración de puertos:
+> Asegúrate de que el archivo `.env` esté dentro de la carpeta `backend/`. Debe contener tu API Key de Groq y la configuración de puertos:
 > ```env
 > POSTGRES_PORT=5433
 > REDIS_PORT=6380
@@ -38,25 +37,24 @@ Copia la carpeta entera `MAIS_IA` al escritorio del nuevo equipo.
 > GROQ_API_KEY=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
 > ```
 
-### Paso 2: Descargar e Instalar Ngrok
-1. Descarga Ngrok para Windows desde la web oficial.
-2. Descomprímelo y mete el archivo `ngrok.exe` dentro de la carpeta oculta `C:\Users\usuario\AppData\Local\ngrok\ngrok.exe` (o modifica el archivo `start_mais_ia.bat` para apuntar a la ruta donde lo pongas).
-3. Registra el authtoken de tu cuenta de Ngrok ejecutando en la consola (CMD) del nuevo ordenador:
+### Paso 2: Colocar y Autenticar Ngrok
+1. Descarga Ngrok para Windows y extrae el archivo **`ngrok.exe`** directamente en la raíz de esta carpeta (en el mismo nivel donde está `start_mais_ia.bat`).
+2. Registra el token de Carla en ese nuevo ordenador abriendo una consola (CMD) en la carpeta raíz y ejecutando:
    ```cmd
-   C:\Users\usuario\AppData\Local\ngrok\ngrok.exe config add-authtoken <TU_TOKEN>
+   ngrok.exe config add-authtoken <TU_TOKEN>
    ```
 
-### Paso 3: Instalar dependencias de Python y Node.js
-Para instalar las librerías necesarias del sistema en el nuevo ordenador, abre una consola (CMD) y ejecuta los siguientes comandos:
+### Paso 3: Crear el Entorno Virtual e Instalar Librerías (Solo la primera vez)
+Abre una consola (CMD) en el nuevo ordenador y ejecuta estos comandos para crear las dependencias de forma aislada e independiente en el proyecto:
 
-1. **Dependencias del Backend (Python):**
-   Navega a la carpeta de `backend` y ejecuta:
+1. **Backend (Python .venv):**
    ```cmd
    cd backend
+   python -m venv .venv
+   .venv\Scripts\activate
    pip install -r requirements.txt
    ```
-2. **Dependencias del Frontend (Node.js):**
-   Vuelve a la raíz, navega a la carpeta de `frontend` y ejecuta:
+2. **Frontend (Node.js):**
    ```cmd
    cd ../frontend
    npm install
@@ -65,7 +63,7 @@ Para instalar las librerías necesarias del sistema en el nuevo ordenador, abre 
 ### Paso 4: Arrancar los servicios
 1. Abre **Docker Desktop** en el nuevo ordenador.
 2. Ejecuta el archivo **`start_mais_ia.bat`** haciendo doble clic.
-3. Se abrirán 4 terminales ejecutando las bases de datos (Postgres, Redis, Qdrant), Celery, FastAPI, el panel de Next.js y el túnel de Ngrok de forma automática y simultánea.
+3. Se abrirán 4 terminales independientes levantando las bases de datos en Docker, Celery, el Backend de FastAPI (conectado a tu entorno virtual `.venv`), el Frontend en Next.js y el túnel de Ngrok enlazado a tu archivo local `ngrok.exe`.
 
 ---
 
