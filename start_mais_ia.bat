@@ -1,11 +1,11 @@
 @echo off
 echo Iniciando entorno de desarrollo de MAIS_IA...
 
-:: Cargar variables de entorno desde backend/.env
+:: Cargar variables de entorno de forma limpia y sin espacios desde backend/.env
 if exist "%~dp0backend\.env" (
     echo Cargando variables de entorno desde backend/.env...
-    for /f "usebackq tokens=1,2 delims==" %%i in ("%~dp0backend\.env") do (
-        set %%i=%%j
+    for /f "usebackq tokens=1,* delims==" %%i in (`powershell -Command "Get-Content '%~dp0backend\.env' | Where-Object { $_ -match '=' -and -not $_.Trim().StartsWith('#') } | ForEach-Object { $k,$v = $_ -split '=', 2; Write-Output ($k.Trim() + '=' + $v.Trim()) }"`) do (
+        set "%%i=%%j"
     )
 )
 
