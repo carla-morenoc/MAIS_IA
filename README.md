@@ -2,7 +2,7 @@
 
 Este es el backend y el panel de control local del asistente inteligente RAG (Retrieval-Augmented Generation) para el manual de **MAIS**.
 
-El sistema es completamente **portable** y dinámico. Al utilizar rutas relativas, puedes mover esta carpeta completa a cualquier ordenador y funcionará sin tener que alterar las configuraciones internas de Windows.
+El sistema es completamente **portable** y dinámico. Al utilizar rutas relativas y variables cargadas de forma local, puedes mover esta carpeta completa a cualquier ordenador y funcionará sin tener que alterar las configuraciones internas de Windows.
 
 ---
 
@@ -29,20 +29,19 @@ Si quieres copiar este proyecto a otro ordenador (por ejemplo, mediante un pendr
 ### Paso 1: Copiar la carpeta y el archivo `.env`
 Copia la carpeta entera `MAIS_IA` al disco local del nuevo ordenador (se recomienda el Escritorio para mayor velocidad).
 > [!IMPORTANT]  
-> Asegúrate de que el archivo `.env` esté dentro de la carpeta `backend/`. Debe contener tu API Key de Groq y la configuración de puertos:
+> Asegúrate de que el archivo `.env` esté dentro de la carpeta `backend/`. Debe contener tu API Key de Groq, la configuración de puertos y tu token de Ngrok:
 > ```env
 > POSTGRES_PORT=5433
 > REDIS_PORT=6380
 > CORS_ORIGINS=["http://localhost:3000", "http://localhost:8000", "https://maisformacion.com"]
 > GROQ_API_KEY=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
+> NGROK_AUTHTOKEN=3IAnRwu81jvyTzONXlQixB0ItNz_58cQHab69cxu7j1c3xhVa
 > ```
 
-### Paso 2: Colocar y Autenticar Ngrok
-1. Descarga Ngrok para Windows y extrae el archivo **`ngrok.exe`** directamente en la raíz de esta carpeta (en el mismo nivel donde está `start_mais_ia.bat`).
-2. Registra el token de Carla en ese nuevo ordenador abriendo una consola (CMD) en la carpeta raíz y ejecutando:
-   ```cmd
-   ngrok.exe config add-authtoken <TU_TOKEN>
-   ```
+### Paso 2: Colocar Ngrok
+Descarga Ngrok para Windows y extrae el archivo **`ngrok.exe`** directamente en la raíz de esta carpeta (en el mismo nivel donde está `start_mais_ia.bat`). 
+
+*(Ya no necesitas registrar el token con comandos ni guardarlo en las carpetas del sistema. El script `.bat` leerá automáticamente la variable `NGROK_AUTHTOKEN` de tu `.env` local antes de abrir el túnel).*
 
 ### Paso 3: Crear el Entorno Virtual e Instalar Librerías (Solo la primera vez)
 Abre una consola (CMD) en el nuevo ordenador y ejecuta estos comandos para crear las dependencias de forma aislada e independiente en el proyecto:
@@ -63,7 +62,7 @@ Abre una consola (CMD) en el nuevo ordenador y ejecuta estos comandos para crear
 ### Paso 4: Arrancar los servicios
 1. Abre **Docker Desktop** en el nuevo ordenador.
 2. Ejecuta el archivo **`start_mais_ia.bat`** haciendo doble clic.
-3. Se abrirán 4 terminales independientes levantando las bases de datos en Docker, Celery, el Backend de FastAPI (conectado a tu entorno virtual `.venv`), el Frontend en Next.js y el túnel de Ngrok enlazado a tu archivo local `ngrok.exe`.
+3. Se abrirán 4 terminales independientes levantando las bases de datos en Docker, Celery, el Backend de FastAPI (conectado a tu entorno virtual `.venv`), el Frontend en Next.js y el túnel de Ngrok cargando tus credenciales del `.env` local.
 
 ---
 

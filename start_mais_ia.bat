@@ -1,6 +1,14 @@
 @echo off
 echo Iniciando entorno de desarrollo de MAIS_IA...
 
+:: Cargar variables de entorno desde backend/.env
+if exist "%~dp0backend\.env" (
+    echo Cargando variables de entorno desde backend/.env...
+    for /f "usebackq tokens=1,2 delims==" %%i in ("%~dp0backend\.env") do (
+        set %%i=%%j
+    )
+)
+
 echo Levantando contenedores Docker...
 docker compose up -d
 
