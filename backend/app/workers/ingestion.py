@@ -298,3 +298,168 @@ def process_pdf_task(self, document_id: str) -> dict[str, str | int]:  # noqa: A
                     "document_id": document_id,
                     "error": f"Reintentos máximos agotados. Error original: {exc}",
                 }
+
+
+# ── TAREAS DE SINCRONIZACIÓN E INGESTIÓN DE YOUTUBE ──────────────────
+
+import xml.etree.ElementTree as ET
+import httpx
+import uuid
+from qdrant_client.models import PointStruct, SparseVector
+from app.db.qdrant import get_qdrant_client
+
+@celery_app.task(
+    name="MAIS_IA.process_youtube_video",
+    bind=True,
+    max_retries=3,
+    default_retry_delay=10,
+)
+def process_youtube_video_task(self, document_id: str):
+    """Descarga la transcripción del vídeo de YouTube, genera embeddings y la guarda en Qdrant."""
+    logger.info(f"Iniciando procesamiento de vídeo de YouTube: {document_id}")
+    
+    from youtube_transcript_api import YouTubeTranscriptApi
+    
+    with sync_session_factory() as session:
+        doc = session.get(Document, document_id)
+        if doc is None:
+            logger.error(f"Documento no encontrado: {document_id}")
+            return {"status": "error", "message": "Vídeo no encontrado"}
+            
+        doc.status = DocumentStatus.PROCESSING
+        session.commit()
+        
+        try:
+            # Extraer video_id de la URL
+            video_id = doc.file_path.split("v=")[-1].split("&")[0]
+            logger.info(f"Descargando transcripción para video_id: {video_id}")
+            
+            try:
+                ytt = YouTubeTranscriptApi()
+                try:
+                    transcript = ytt.fetch(video_id, languages=['es', 'en'])
+                except AttributeError:
+                    transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['es', 'en'])
+            except Exception as tr_exc:
+                # Si YouTube no tiene transcripción, marcamos inmediatamente como FAILED sin reintentos
+                logger.warning(f"Vídeo {video_id} sin transcripción disponible: {tr_exc}")
+                doc.status = DocumentStatus.FAILED
+                doc.error_message = f"Sin transcripción disponible en YouTube ({tr_exc})"
+                session.commit()
+                return {"status": "failed", "document_id": document_id, "error": str(tr_exc)}
+                
+            # Segmentar transcripción en bloques de 90 segundos
+            chunks_data = []
+            chunk_index = 0
+            texto_acumulado = []
+            segundo_inicio = None
+            
+            for entrada in transcript:
+                text_val = getattr(entrada, 'text', None) or (entrada.get('text') if isinstance(entrada, dict) else str(entrada))
+                start_val = getattr(entrada, 'start', None) if hasattr(entrada, 'start') else (entrada.get('start') if isinstance(entrada, dict) else 0.0)
+                dur_val = getattr(entrada, 'duration', None) if hasattr(entrada, 'duration') else (entrada.get('duration') if isinstance(entrada, dict) else 0.0)
+
+                if segundo_inicio is None:
+                    segundo_inicio = start_val
+                texto_acumulado.append(text_val)
+                
+                duracion = (start_val + dur_val) - segundo_inicio
+                if duracion >= 90:
+                    text_content = " ".join(texto_acumulado)
+                    chunks_data.append(ChunkData(
+                        text=text_content,
+                        doc_id=str(doc.id),
+                        filename=doc.filename,
+                        page_number=int(segundo_inicio),  # Usamos page_number para almacenar el timestamp en segundos
+                        chunk_index=chunk_index
+                    ))
+                    chunk_index += 1
+                    texto_acumulado = []
+                    segundo_inicio = None
+                    
+            if texto_acumulado and segundo_inicio is not None:
+                text_content = " ".join(texto_acumulado)
+                chunks_data.append(ChunkData(
+                    text=text_content,
+                    doc_id=str(doc.id),
+                    filename=doc.filename,
+                    page_number=int(segundo_inicio),
+                    chunk_index=chunk_index
+                ))
+                
+            if not chunks_data:
+                logger.warning(f"La transcripción del vídeo {video_id} está vacía.")
+                doc.status = DocumentStatus.FAILED
+                doc.error_message = "Transcripción vacía"
+                session.commit()
+                return {"status": "failed", "document_id": document_id, "error": "Transcripción vacía"}
+                
+            logger.info(f"Generados {len(chunks_data)} chunks para el vídeo {doc.filename}")
+            
+            # Generar vectores de búsqueda híbrida e insertar en la colección 'aegis_chunks' de Qdrant
+            texts = [c.text for c in chunks_data]
+            dense = generate_dense_embeddings(texts)
+            sparse = generate_sparse_embeddings(texts)
+            
+            from qdrant_client import QdrantClient
+            client_sync = get_qdrant_client()
+            
+            points = []
+            for chunk, dense_emb, sparse_emb in zip(chunks_data, dense, sparse, strict=True):
+                points.append(
+                    PointStruct(
+                        id=str(uuid.uuid4()),
+                        vector={
+                            "dense": dense_emb,
+                            "sparse": SparseVector(indices=sparse_emb["indices"], values=sparse_emb["values"])
+                        },
+                        payload={
+                            "doc_id": chunk.doc_id,
+                            "filename": chunk.filename,
+                            "page_number": chunk.page_number,  # Timestamp inicial (segundos)
+                            "chunk_index": chunk.chunk_index,
+                            "text": chunk.text,
+                            "type": "youtube",      # Identificador de fuente
+                            "video_id": video_id
+                        }
+                    )
+                )
+                
+            logger.info(f"Subiendo {len(points)} puntos a Qdrant...")
+            client_sync.upsert(collection_name=settings.qdrant_collection, points=points)
+            
+            doc.status = DocumentStatus.COMPLETED
+            doc.total_chunks = len(chunks_data)
+            doc.error_message = None
+            session.commit()
+            
+            logger.info(f"Vídeo {doc.filename} procesado con éxito.")
+            return {
+                "status": "completed",
+                "document_id": document_id,
+                "total_chunks": len(chunks_data),
+            }
+            
+        except Exception as exc:
+            session.rollback()
+            logger.error(f"Fallo al procesar el vídeo {document_id}: {exc}")
+            
+            try:
+                raise self.retry(exc=exc)
+            except self.MaxRetriesExceededError:
+                logger.error(f"Reintentos máximos agotados para el vídeo {document_id}. Marcando como FAILED.")
+                try:
+                    document = session.get(Document, document_id)
+                    if document is not None:
+                        document.status = DocumentStatus.FAILED
+                        document.error_message = f"Error al procesar: {exc}"
+                        session.commit()
+                except Exception as update_exc:
+                    logger.exception(f"No se pudo actualizar el estado a FAILED para {document_id}: {update_exc}")
+                    session.rollback()
+                return {
+                    "status": "failed",
+                    "document_id": document_id,
+                    "error": f"Error: {exc}",
+                }
+

@@ -8,6 +8,10 @@ a un worker de Celery para no bloquear el hilo de FastAPI.
 
 import logging
 import uuid
+import xml.etree.ElementTree as ET
+import httpx
+import re
+
 from datetime import datetime
 from pathlib import Path
 
@@ -36,13 +40,19 @@ class DocumentItem(BaseModel):
 
     document_id: str
     filename: str
+    file_path: str | None = None
     status: str
+    document_type: str | None = "pdf"
     total_chunks: int | None
     error_message: str | None
     created_at: datetime
     updated_at: datetime
 
 
+
+
+class SyncYoutubeRequest(BaseModel):
+    channel_url: str | None = None
 
 class DocumentUploadResponse(BaseModel):
     """Respuesta tras subir un documento."""
@@ -58,6 +68,7 @@ class DocumentStatusResponse(BaseModel):
     document_id: str
     filename: str
     status: str
+    document_type: str | None = "pdf"
     total_chunks: int | None
     error_message: str | None
     created_at: datetime
@@ -191,6 +202,7 @@ async def get_document_status(
         document_id=str(document.id),
         filename=document.filename,
         status=document.status.value,
+        document_type=getattr(document, 'document_type', 'pdf'),
         total_chunks=document.total_chunks,
         error_message=document.error_message,
         created_at=document.created_at,
@@ -216,7 +228,9 @@ async def list_documents(
         {
             "document_id": str(d.id),
             "filename": d.filename,
+            "file_path": d.file_path,
             "status": d.status.value,
+            "document_type": getattr(d, 'document_type', 'pdf'),
             "total_chunks": d.total_chunks,
             "error_message": d.error_message,
             "created_at": d.created_at,
@@ -337,4 +351,82 @@ async def delete_document(
         "status": "success",
         "message": f"Documento '{document.filename}' y vectores de Qdrant eliminados correctamente.",
     }
+
+
+@router.get(
+    "/youtube-channel",
+    summary="Obtener ID y URL del canal de YouTube configurado por defecto",
+    description="Devuelve el canal de YouTube configurado en las variables de entorno del servidor.",
+)
+async def get_youtube_channel_info():
+    """Retorna la configuración actual del canal de YouTube."""
+    return {
+        "channel_id": settings.youtube_channel_id,
+        "channel_url": f"https://www.youtube.com/channel/{settings.youtube_channel_id}"
+    }
+
+
+@router.post(
+    "/sync-youtube",
+    status_code=status.HTTP_200_OK,
+    summary="Sincronizar dinámicamente videotutoriales de YouTube",
+    description="Consulta el canal de YouTube, registra vídeos nuevos e inicia su indexación."
+)
+async def sync_youtube_videos(
+    payload: SyncYoutubeRequest | None = None,
+    session: AsyncSession = Depends(get_db_session),
+):
+    channel_id = settings.youtube_channel_id
+    if payload and payload.channel_url:
+        match = re.search(r"channel/(UC[\w-]+)", payload.channel_url)
+        if match:
+            channel_id = match.group(1)
+        else:
+            channel_id = payload.channel_url.strip()
+
+    url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
+    
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.get(url)
+            if r.status_code != 200:
+                raise HTTPException(status_code=400, detail="No se pudo leer el feed del canal de YouTube.")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error conectando con YouTube: {e}")
+            
+    root = ET.fromstring(r.text)
+    ns = {'atom': 'http://www.w3.org/2005/Atom', 'yt': 'http://www.youtube.com/xml/schemas/2015'}
+    
+    from app.workers.ingestion import process_youtube_video_task
+    
+    added_count = 0
+    for entry in root.findall('atom:entry', ns):
+        video_id_el = entry.find('yt:videoId', ns)
+        title_el = entry.find('atom:title', ns)
+        if video_id_el is None or title_el is None:
+            continue
+        
+        video_id = video_id_el.text
+        title = title_el.text
+        video_url = f"https://www.youtube.com/watch?v={video_id}"
+        
+        # Comprobar si existe
+        result = await session.execute(select(Document).where(Document.file_path == video_url))
+        existe = result.scalar_one_or_none()
+        if not existe:
+            new_id = uuid.uuid4()
+            nuevo_doc = Document(
+                id=new_id,
+                filename=title,
+                file_path=video_url,
+                document_type="youtube",
+                status=DocumentStatus.PENDING
+            )
+            session.add(nuevo_doc)
+            await session.flush()
+            
+            process_youtube_video_task.delay(str(new_id))
+            added_count += 1
+
+    return {"status": "success", "message": f"Se han encolado {added_count} nuevos vídeos.", "added": added_count}
 

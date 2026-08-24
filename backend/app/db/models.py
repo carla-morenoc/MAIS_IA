@@ -65,6 +65,12 @@ class Document(Base):
         nullable=False,
         comment="Ruta en disco donde se almacena el archivo",
     )
+    document_type: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="pdf",
+        comment="Tipo de documento: pdf o youtube",
+    )
     status: Mapped[DocumentStatus] = mapped_column(
         Enum(DocumentStatus, name="document_status", native_enum=False),
         nullable=False,

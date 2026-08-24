@@ -89,7 +89,7 @@ class CRAGEngine:
         logger.info("Candidatos unificados de búsqueda dual: %d fragmentos", len(all_candidates))
 
         # Re-Ranking ejecutado en hilo secundario sobre todos los candidatos
-        top_chunks = await asyncio.to_thread(self.reranker.rerank, query, all_candidates, top_n=7)
+        top_chunks = await asyncio.to_thread(self.reranker.rerank, query, all_candidates, top_n=10)
         latencies["retrieval"] = round((time.perf_counter() - start_ret) * 1000, 2)
 
         # ── 2. Nodo: GRADE ─────────────────────────────────
@@ -135,18 +135,15 @@ class CRAGEngine:
             query_used = await self.llm.rewrite_query(query)
             
             # Reintentar búsqueda híbrida asíncrona con la query optimizada
-            retry_candidates = await hybrid_search(query_used, document_ids=document_ids, top_k=20)
-            retry_chunks = await asyncio.to_thread(self.reranker.rerank, query_used, retry_candidates, top_n=7)
+            retry_candidates = await hybrid_search(query_used, document_ids=document_ids, top_k=25)
+            retry_chunks = await asyncio.to_thread(self.reranker.rerank, query_used, retry_candidates, top_n=10)
             
             latencies["rewrite"] = round((time.perf_counter() - start_rew) * 1000, 2)
 
             # Re-evaluar score de la nueva búsqueda
-            retry_max_score = retry_chunks[0]["rerank_score"] if retry_chunks else 0.0
-            logger.info("Evaluación tras reintento. Score: %0.4f", retry_max_score)
-
-            if retry_max_score < effective_threshold:
-                # Si el segundo intento vuelve a fallar, caemos a NO_DATA_FOUND para evitar alucinaciones
-                logger.error("El reintento también falló por debajo del umbral. Estado: NO_DATA_FOUND.")
+            if not retry_chunks or (retry_chunks[0]["rerank_score"] < effective_threshold and not has_literal_match):
+                # Si aún tras la reescritura no hay datos relevantes
+                logger.warning("Búsqueda reintentada sin resultados suficientes. Estado: NO_DATA_FOUND.")
                 crag_status = "NO_DATA_FOUND"
                 final_chunks = []
             else:
@@ -167,8 +164,13 @@ class CRAGEngine:
             # Construir contexto para el LLM con etiquetas explícitas de cita
             context_blocks = []
             for i, chunk in enumerate(final_chunks, start=1):
+                if chunk.get("type") == "youtube":
+                    cita = f"[Video: {chunk['filename']}, seg. {chunk['page_number']}]"
+                else:
+                    cita = f"[{chunk['filename']}, pág. {chunk['page_number']}]"
+                
                 context_blocks.append(
-                    f"Cita requerida para este texto: [{chunk['filename']}, pág. {chunk['page_number']}]\n"
+                    f"Cita requerida para este texto: {cita}\n"
                     f"Texto: {chunk['text']}\n"
                 )
             context_str = "\n---\n".join(context_blocks)
@@ -177,16 +179,17 @@ class CRAGEngine:
                 "Eres Maisito, el asistente virtual oficial, cercano y amigable de MAIS, una empresa de informática.\n"
                 "Tu objetivo es guiar y ayudar a los clientes con sus dudas sobre el funcionamiento de nuestros programas y manuales de manera atenta, educada y profesional. Evita mencionar repetidamente o de forma innecesaria las palabras 'ERP' o 'software de gestión' en tus respuestas. Céntrate en responder directamente a la consulta del usuario.\n\n"
                 "REGLAS ESTRICTAS DE FORMATO Y CITACIÓN:\n"
-                "1. CITAS INLINE EN CADA PÁRRAFO: Cada párrafo o dato de tu respuesta DEBE incluir obligatoriamente su cita [nombre_archivo.pdf, pág. X] intercalada al final de la oración/párrafo.\n"
-                "2. SIN SECCIÓN SEPARADA DE REFERENCIAS: Queda prohibido crear listas finales de 'Referencias', 'Fuentes' o 'Bibliografía' al final del mensaje.\n"
-                "3. SIN ETIQUETAS GENÉRICAS: No escribas expresiones como 'En el Fragmento [1]' ni 'Según la Fuente 1'. En su lugar, redacta la información directamente e inserta la cita clicable [nombre_archivo.pdf, pág. X] al final de la frase.\n"
-                "4. RIGUROSIDAD ABSOLUTA: Toda afirmación debe basarse exclusivamente en el texto provisto. Si no tienes la información en el manual, admítelo con tu estilo educado y servicial."
+                "1. CITAS INLINE EN CADA PÁRRAFO: Cada párrafo o dato de tu respuesta DEBE incluir obligatoriamente su cita correspondiente al final de la frase o párrafo. Si procede de un manual PDF, cítala como [nombre_archivo.pdf, pág. X]. Si procede de un videotutorial de YouTube, cítala como [Video: Nombre del video, seg. X].\n"
+                "2. INTEGRACIÓN MULTIFUENTE (PDFs + VIDEOS): Cuando el contexto contenga fragmentos tanto de manuales PDF como de videotutoriales de YouTube, integra y complementa armónicamente la información de ambas fuentes en tu explicación, contrastando los procedimientos técnicos del PDF con los consejos prácticos del videotutorial y citando cada uno en su sitio correspondiente.\n"
+                "3. SIN SECCIÓN SEPARADA DE REFERENCIAS: Queda prohibido crear listas finales de 'Referencias', 'Fuentes' o 'Bibliografía' al final del mensaje.\n"
+                "4. SIN ETIQUETAS GENÉRICAS: No escribas expresiones como 'En el Fragmento [1]' ni 'Según la Fuente 1'. En su lugar, redacta la información directamente e inserta la cita con corchetes al final de la frase.\n"
+                "5. RIGUROSIDAD ABSOLUTA: Toda afirmación debe basarse exclusivamente en el contexto provisto. Si no tienes la información en el manual o vídeos provistos, admítelo con tu estilo educado y servicial."
             )
 
             prompt = (
                 f"Consulta del usuario: {query}\n\n"
                 f"Contexto disponible:\n{context_str}\n\n"
-                f"Respuesta redactada con citas intercaladas en cada párrafo con el formato [nombre_archivo.pdf, pág. X]:"
+                f"Respuesta clara y completa con citas intercaladas en cada párrafo ([archivo.pdf, pág. X] o [Video: Nombre, seg. X]):"
             )
 
             try:
@@ -205,6 +208,8 @@ class CRAGEngine:
                 "doc_id": chunk["doc_id"],
                 "filename": chunk["filename"],
                 "page_number": chunk["page_number"],
+                "type": chunk.get("type", "pdf"),
+                "video_id": chunk.get("video_id", None),
                 "score": round(chunk["rerank_score"], 4),
                 "snippet": chunk["text"],
             })

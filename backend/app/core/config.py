@@ -84,6 +84,7 @@ class Settings(BaseSettings):
     chunk_size: int = 500
     chunk_overlap: int = 50
     qdrant_collection: str = "aegis_chunks"
+    youtube_channel_id: str = "UCoZWQl3d034u8OIqnEGEnXA"
 
     # ── PostgreSQL Sync (para Celery workers) ──────────────
     @computed_field  # type: ignore[prop-decorator]

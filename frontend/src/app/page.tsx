@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import dynamic from "next/dynamic";
-import DocumentSidebar from "../components/DocumentSidebar";
+import DocumentSidebar, { TrackedDocument } from "../components/DocumentSidebar";
 import ChatInterface from "../components/ChatInterface";
 
 const PdfViewer = dynamic(() => import("../components/PdfViewer"), {
@@ -12,6 +12,7 @@ const PdfViewer = dynamic(() => import("../components/PdfViewer"), {
 export default function Home() {
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const [selectedFilenames, setSelectedFilenames] = useState<string[]>([]);
+  const [selectedDocuments, setSelectedDocuments] = useState<TrackedDocument[]>([]);
   const [viewerPdf, setViewerPdf] = useState<{
     docId: string;
     filename: string;
@@ -20,20 +21,35 @@ export default function Home() {
   } | null>(null);
   const [highlightEnabled, setHighlightEnabled] = useState(true);
 
-  const handleSelectionChange = (docIds: string[], filenames: string[]) => {
+  const handleSelectionChange = (docIds: string[], filenames: string[], docs?: TrackedDocument[]) => {
     setSelectedDocIds(docIds);
     setSelectedFilenames(filenames);
+    if (docs) {
+      setSelectedDocuments(docs);
+    }
     
     // Si ya no quedan documentos seleccionados en la lista, cerramos el visor
     if (docIds.length === 0) {
       setViewerPdf(null);
     } else if (viewerPdf && !docIds.includes(viewerPdf.docId)) {
-      // Si el documento que estábamos visualizando se deseleccionó, abrimos la página 1 del primer seleccionado
-      setViewerPdf({ docId: docIds[0], filename: filenames[0], pageNumber: 1 });
+      // Si el documento que estábamos visualizando se deseleccionó, buscamos si el primer seleccionado es un PDF
+      const firstDoc = docs ? docs.find(d => d.id === docIds[0]) : null;
+      if (firstDoc && (firstDoc.document_type || "pdf") === "pdf") {
+        setViewerPdf({ docId: firstDoc.id, filename: firstDoc.filename, pageNumber: 1 });
+      } else {
+        setViewerPdf(null);
+      }
     }
   };
 
-  const handleOpenPdf = (docId: string, filename: string, pageNumber: number, snippet?: string) => {
+  const handleOpenPdf = (docId: string, filename: string, pageNumber: number, snippet?: string, type: "pdf" | "youtube" = "pdf", videoId?: string) => {
+    if (type === "youtube" || videoId) {
+      const vId = videoId || docId;
+      const ytUrl = `https://www.youtube.com/watch?v=${vId}&t=${pageNumber}s`;
+      window.open(ytUrl, "_blank");
+      return;
+    }
+
     setViewerPdf({ docId, filename, pageNumber, snippet });
   };
 
@@ -57,13 +73,14 @@ export default function Home() {
         <ChatInterface
           selectedDocIds={selectedDocIds}
           selectedFilenames={selectedFilenames}
+          selectedDocuments={selectedDocuments}
           onOpenPdf={handleOpenPdf}
           viewerPdf={viewerPdf}
           highlightEnabled={highlightEnabled}
           onToggleHighlight={handleToggleHighlight}
         />
 
-        {/* Panel Visor de PDF Interactivo Lateral Derecho */}
+        {/* Panel Visor Interactivo Lateral Derecho (PDF) */}
         {viewerPdf && (
           <PdfViewer
             docId={viewerPdf.docId}
@@ -79,3 +96,4 @@ export default function Home() {
     </div>
   );
 }
+

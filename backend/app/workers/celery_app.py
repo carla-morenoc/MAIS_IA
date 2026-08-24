@@ -38,3 +38,11 @@ celery_app.conf.update(
 celery_app.conf.imports = (
     "app.workers.ingestion",
 )
+
+# Planificación periódica de tareas (Celery Beat)
+celery_app.conf.beat_schedule = {
+    "sync-youtube-videos-every-2-hours": {
+        "task": "MAIS_IA.sync_youtube_videos",
+        "schedule": 7200.0,  # Sincroniza cada 2 horas
+    }
+}

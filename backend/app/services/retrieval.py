@@ -115,6 +115,8 @@ async def hybrid_search(
             "filename": payload.get("filename", ""),
             "page_number": payload.get("page_number", 0),
             "chunk_index": payload.get("chunk_index", 0),
+            "type": payload.get("type", "pdf"),
+            "video_id": payload.get("video_id", None),
         })
 
     logger.info(

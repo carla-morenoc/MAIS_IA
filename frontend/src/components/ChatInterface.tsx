@@ -1,14 +1,16 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { Send, Bot, User, Sparkles, AlertCircle, FileText, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { Send, Bot, User, Sparkles, AlertCircle, FileText, ChevronDown, ChevronUp, Loader2, Play, ExternalLink } from "lucide-react";
 import { queryChat, ChatQueryResponse, SourceDocument } from "../lib/api";
+import { TrackedDocument } from "./DocumentSidebar";
 import LatencyDisplay from "./LatencyDisplay";
 
 interface ChatInterfaceProps {
   selectedDocIds: string[];
   selectedFilenames: string[];
-  onOpenPdf: (docId: string, filename: string, pageNumber: number, snippet?: string) => void;
+  selectedDocuments?: TrackedDocument[];
+  onOpenPdf: (docId: string, filename: string, pageNumber: number, snippet?: string, type?: "pdf" | "youtube", videoId?: string) => void;
   viewerPdf: { docId: string; filename: string; pageNumber: number; snippet?: string } | null;
   highlightEnabled: boolean;
   onToggleHighlight: () => void;
@@ -26,6 +28,7 @@ interface Message {
 export default function ChatInterface({
   selectedDocIds,
   selectedFilenames,
+  selectedDocuments,
   onOpenPdf,
   viewerPdf,
   highlightEnabled,
@@ -35,7 +38,7 @@ export default function ChatInterface({
     {
       id: "welcome",
       sender: "bot",
-      text: "¡Hola! Soy Maisito, tu asistente inteligente. Sube un documento PDF y hazme cualquier consulta para empezar.",
+      text: "¡Hola! Soy Maisito, tu asistente inteligente. Sube un documento PDF o selecciona un videotutorial y hazme cualquier consulta para empezar.",
     },
   ]);
   const [input, setInput] = useState("");
@@ -67,7 +70,7 @@ export default function ChatInterface({
       const warnMsg: Message = {
         id: `bot-warn-${Date.now()}`,
         sender: "bot",
-        text: "⚠️ No hay ningún documento PDF seleccionado. Por favor, marca al menos una casilla en el panel izquierdo de 'Documentos Activos' para consultar.",
+        text: "⚠️ No hay ningún documento ni vídeo seleccionado. Por favor, marca al menos una casilla en el panel izquierdo para consultar.",
       };
       setMessages((prev) => [...prev, warnMsg]);
       return;
@@ -95,10 +98,29 @@ export default function ChatInterface({
     }
   };
 
+  const openYoutubeUrl = (videoIdOrDocId: string, seconds: number, filename?: string) => {
+    let ytUrl = "";
+    if (videoIdOrDocId && !videoIdOrDocId.includes("-")) {
+      // Es un videoId de YouTube válido
+      ytUrl = `https://www.youtube.com/watch?v=${videoIdOrDocId}&t=${seconds}s`;
+    } else {
+      const doc = selectedDocuments?.find(d => d.id === videoIdOrDocId);
+      if (doc?.file_path) {
+        const separator = doc.file_path.includes("?") ? "&" : "?";
+        ytUrl = `${doc.file_path}${separator}t=${seconds}s`;
+      } else if (filename) {
+        ytUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(filename)}`;
+      }
+    }
+    if (ytUrl) {
+      window.open(ytUrl, "_blank");
+    }
+  };
+
   const parseCitations = (text: string, sources: SourceDocument[] | undefined) => {
     if (!text) return text;
     
-    const citationRegex = /\[([^\]]+?\.pdf)(?:[,\s]*(?:pág|pag|página|pagina|p)\.?\s*(\d+))?\]/gi;
+    const citationRegex = /\[([^]]+?\.pdf)(?:[,\s]*(?:pág|pag|página|pagina|p)\.?\s*(\d+))?\]|\[Video:\s*(.+?),\s*(?:seg|segundo|s)\.?\s*(\d+)\]/gi;
     const parts = [];
     let lastIndex = 0;
     let match;
@@ -112,17 +134,24 @@ export default function ChatInterface({
         parts.push(text.substring(lastIndex, matchIndex));
       }
 
-      const filename = match[1];
-      const pageNumber = match[2] ? parseInt(match[2], 10) : 1;
+      const isYt = match[3] !== undefined;
+      const filename = isYt ? match[3] : match[1];
+      const pageNumber = isYt ? parseInt(match[4], 10) : (match[2] ? parseInt(match[2], 10) : 1);
       const fullCitationText = match[0];
 
-      let matchingSource = sources?.find(
-        (src) => src.filename.toLowerCase() === filename.toLowerCase()
-      );
+      let matchingSource = sources?.find((src) => {
+        if (isYt) {
+          return src.type === "youtube" && src.filename.toLowerCase().includes(filename.toLowerCase());
+        }
+        return src.filename.toLowerCase() === filename.toLowerCase();
+      });
 
       if (!matchingSource) {
         const normCitation = normalizeName(filename);
         matchingSource = sources?.find((src) => {
+          if (isYt) {
+            return src.type === "youtube";
+          }
           const normSrc = normalizeName(src.filename);
           return normSrc === normCitation || normSrc.includes(normCitation) || normCitation.includes(normSrc);
         });
@@ -132,15 +161,50 @@ export default function ChatInterface({
         matchingSource = sources[0];
       }
 
-      if (matchingSource) {
-        const docId = matchingSource.doc_id;
-        const targetFilename = matchingSource.filename;
-        const snippetText = matchingSource.snippet ? matchingSource.snippet.slice(0, 50) : undefined;
+      let docId = matchingSource?.doc_id || "";
+      let targetFilename = matchingSource?.filename || filename;
+      const snippetText = matchingSource?.snippet ? matchingSource.snippet.slice(0, 50) : undefined;
+      const videoId = matchingSource?.video_id;
 
+      if (!docId && selectedDocuments && selectedDocuments.length > 0) {
+        const normCitation = normalizeName(filename);
+        const foundDoc = selectedDocuments.find((d) => {
+          const normDoc = normalizeName(d.filename);
+          return normDoc === normCitation || normDoc.includes(normCitation) || normCitation.includes(normDoc);
+        });
+        if (foundDoc) {
+          docId = foundDoc.id;
+          targetFilename = foundDoc.filename;
+        } else {
+          const firstPdf = selectedDocuments.find(d => (d.document_type || "pdf") === "pdf");
+          if (firstPdf) {
+            docId = firstPdf.id;
+            targetFilename = firstPdf.filename;
+          }
+        }
+      }
+      if (!docId && selectedDocIds.length > 0) {
+        docId = selectedDocIds[0];
+      }
+
+      if (isYt) {
         parts.push(
           <button
             key={`cite-${matchIndex}`}
-            onClick={() => onOpenPdf(docId, targetFilename, pageNumber, snippetText)}
+            onClick={() => openYoutubeUrl(videoId || docId, pageNumber, targetFilename)}
+            className="px-2 py-0.5 mx-1 rounded-md bg-red-600/90 hover:bg-red-500 active:bg-red-700 text-white font-semibold text-xs transition-all duration-150 cursor-pointer inline-flex items-center gap-1.5 focus:outline-none shadow-sm hover:shadow-red-500/20 border border-red-400/30"
+            title={`Abrir vídeo en YouTube en el segundo ${pageNumber}`}
+          >
+            <Play className="h-3.5 w-3.5 shrink-0 text-red-200" />
+            <span>{fullCitationText}</span>
+            <ExternalLink className="h-2.5 w-2.5 opacity-70" />
+          </button>
+        );
+      } else {
+        parts.push(
+          <button
+            key={`cite-${matchIndex}`}
+            onClick={() => onOpenPdf(docId, targetFilename, pageNumber, snippetText, "pdf")}
             className="px-2 py-0.5 mx-1 rounded-md bg-blue-600/90 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold text-xs transition-all duration-150 cursor-pointer inline-flex items-center gap-1.5 focus:outline-none shadow-sm hover:shadow-blue-500/20 border border-blue-400/30"
             title={`Abrir página ${pageNumber} en el visor de ${targetFilename}`}
           >
@@ -148,8 +212,6 @@ export default function ChatInterface({
             <span>{fullCitationText}</span>
           </button>
         );
-      } else {
-        parts.push(fullCitationText);
       }
 
       lastIndex = citationRegex.lastIndex;
@@ -261,6 +323,9 @@ export default function ChatInterface({
     return <div className="space-y-1">{formattedElements}</div>;
   };
 
+  const firstSelectedDoc = selectedDocuments?.find(d => d.id === selectedDocIds[0]);
+  const isFirstYt = firstSelectedDoc?.document_type === "youtube";
+
   return (
     <section className="flex-1 flex flex-col h-full bg-zinc-900/10">
 
@@ -310,18 +375,33 @@ export default function ChatInterface({
           </button>
 
           {selectedDocIds.length > 0 && (
-            <button
-              onClick={() =>
-                onOpenPdf(selectedDocIds[0], selectedFilenames[0], 1)
-              }
-              className="flex items-center gap-1.5 text-xs bg-zinc-900 border border-zinc-800/80 hover:bg-zinc-800 text-zinc-300 hover:text-zinc-100 px-3 py-1.5 rounded-lg transition-colors font-medium shadow-sm cursor-pointer"
-              title="Visualizar el documento seleccionado"
-            >
-              <FileText className="h-3.5 w-3.5 text-blue-400" />
-              {selectedDocIds.length === 1
-                ? "Ver documento"
-                : "Ver primer documento"}
-            </button>
+            isFirstYt ? (
+              <button
+                onClick={() => {
+                  const ytUrl = firstSelectedDoc?.file_path || `https://www.youtube.com/watch?v=${selectedDocIds[0]}`;
+                  window.open(ytUrl, "_blank");
+                }}
+                className="flex items-center gap-1.5 text-xs bg-red-950/40 border border-red-900/60 hover:bg-red-900/40 text-red-300 hover:text-red-100 px-3 py-1.5 rounded-lg transition-colors font-medium shadow-sm cursor-pointer"
+                title="Abrir videotutorial en YouTube"
+              >
+                <Play className="h-3.5 w-3.5 text-red-400" />
+                <span>{selectedDocIds.length === 1 ? "Ver tutorial en YouTube" : "Ver primer tutorial"}</span>
+                <ExternalLink className="h-3 w-3 opacity-70" />
+              </button>
+            ) : (
+              <button
+                onClick={() =>
+                  onOpenPdf(selectedDocIds[0], selectedFilenames[0], 1)
+                }
+                className="flex items-center gap-1.5 text-xs bg-zinc-900 border border-zinc-800/80 hover:bg-zinc-800 text-zinc-300 hover:text-zinc-100 px-3 py-1.5 rounded-lg transition-colors font-medium shadow-sm cursor-pointer"
+                title="Visualizar el documento PDF seleccionado"
+              >
+                <FileText className="h-3.5 w-3.5 text-blue-400" />
+                {selectedDocIds.length === 1
+                  ? "Ver documento"
+                  : "Ver primer documento"}
+              </button>
+            )
           )}
         </div>
       </div>
@@ -398,37 +478,59 @@ export default function ChatInterface({
                       {openSourcesIdx === index && (
                         <div className="border-t border-zinc-850 p-4 space-y-3 bg-zinc-950/40">
 
-                          {msg.sources.map((src, sIdx) => (
-                            <div
-                              key={sIdx}
-                              className="bg-zinc-900/30 border border-zinc-800/40 rounded-xl p-3"
-                            >
-                              <div className="flex items-center justify-between text-zinc-400 font-semibold text-[10px] mb-2">
+                          {msg.sources.map((src, sIdx) => {
+                            const isSourceYt = src.type === "youtube";
+                            return (
+                              <div
+                                key={sIdx}
+                                className="bg-zinc-900/30 border border-zinc-800/40 rounded-xl p-3"
+                              >
+                                <div className="flex items-center justify-between text-zinc-400 font-semibold text-[10px] mb-2">
 
-                                <button
-                                  onClick={() =>
-                                    onOpenPdf(
-                                      src.doc_id,
-                                      src.filename,
-                                      src.page_number
-                                    )
-                                  }
-                                  className="truncate max-w-[70%] hover:text-blue-400 hover:underline text-left cursor-pointer transition-colors"
-                                  title="Ver esta página en el visor"
-                                >
-                                  {src.filename} (pág. {src.page_number})
-                                </button>
+                                  {isSourceYt ? (
+                                    <button
+                                      onClick={() =>
+                                        openYoutubeUrl(
+                                          src.video_id || src.doc_id,
+                                          src.page_number,
+                                          src.filename
+                                        )
+                                      }
+                                      className="truncate max-w-[70%] hover:text-red-400 hover:underline text-left cursor-pointer transition-colors inline-flex items-center gap-1.5 text-red-300"
+                                      title={`Abrir vídeo en YouTube en el segundo ${src.page_number}`}
+                                    >
+                                      <Play className="h-3 w-3 text-red-400 shrink-0" />
+                                      <span className="truncate">{src.filename} (seg. {src.page_number})</span>
+                                      <ExternalLink className="h-2.5 w-2.5 opacity-70 shrink-0" />
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() =>
+                                        onOpenPdf(
+                                          src.doc_id,
+                                          src.filename,
+                                          src.page_number
+                                        )
+                                      }
+                                      className="truncate max-w-[70%] hover:text-blue-400 hover:underline text-left cursor-pointer transition-colors inline-flex items-center gap-1.5"
+                                      title="Ver esta página en el visor"
+                                    >
+                                      <FileText className="h-3 w-3 text-blue-400 shrink-0" />
+                                      <span className="truncate">{src.filename} (pág. {src.page_number})</span>
+                                    </button>
+                                  )}
 
-                                <span className="text-blue-400 font-mono">
-                                  Rerank: {src.score}
-                                </span>
+                                  <span className="text-blue-400 font-mono">
+                                    Rerank: {src.score}
+                                  </span>
+                                </div>
+
+                                <p className="text-[11px] text-zinc-500 leading-relaxed italic bg-zinc-950/10 p-2 rounded-lg border border-zinc-900/40">
+                                  "{src.snippet}"
+                                </p>
                               </div>
-
-                              <p className="text-[11px] text-zinc-500 leading-relaxed italic bg-zinc-950/10 p-2 rounded-lg border border-zinc-900/40">
-                                "{src.snippet}"
-                              </p>
-                            </div>
-                          ))}
+                            );
+                          })}
 
                         </div>
                       )}

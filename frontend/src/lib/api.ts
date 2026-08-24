@@ -27,6 +27,8 @@ export interface SourceDocument {
   page_number: number;
   score: number;
   snippet: string;
+  type?: "pdf" | "youtube";
+  video_id?: string;
 }
 
 export interface LatencyBreakdown {
@@ -122,7 +124,9 @@ export async function checkBackendHealth(): Promise<HealthResponse> {
 export interface DocumentItem {
   document_id: string;
   filename: string;
+  file_path?: string;
   status: string;
+  document_type?: string;
   total_chunks: number | null;
   error_message: string | null;
   created_at: string;
@@ -165,3 +169,36 @@ export function getDocumentFileUrl(documentId: string): string {
   return `${BACKEND_BASE_URL}/documents/${documentId}/file`;
 }
 
+/**
+ * Lanza la sincronización manual de vídeos de YouTube.
+ */
+export async function syncYoutubeVideos(channelUrl?: string): Promise<{ status: string; message: string; added?: number }> {
+  const body = channelUrl ? JSON.stringify({ channel_url: channelUrl }) : undefined;
+  const headers = channelUrl ? { "Content-Type": "application/json" } : undefined;
+
+  const response = await fetch(`${BACKEND_BASE_URL}/documents/sync-youtube`, {
+    method: "POST",
+    headers,
+    body,
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || "Error al sincronizar los vídeos de YouTube");
+  }
+
+  return response.json();
+}
+
+/**
+ * Obtiene la configuración por defecto del canal de YouTube desde el backend.
+ */
+export async function getYoutubeChannelConfig(): Promise<{ channel_id: string; channel_url: string }> {
+  const response = await fetch(`${BACKEND_BASE_URL}/documents/youtube-channel`);
+  
+  if (!response.ok) {
+    throw new Error("No se pudo obtener la configuración del canal de YouTube");
+  }
+
+  return response.json();
+}
