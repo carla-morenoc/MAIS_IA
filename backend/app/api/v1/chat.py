@@ -97,6 +97,23 @@ class MessageItem(BaseModel):
     created_at: Any
 
 
+class FAQItem(BaseModel):
+    """Esquema de una pregunta frecuente sugerida de forma interactiva."""
+
+    text: str = Field(..., description="Texto de la pregunta sugerida")
+    desc: str = Field(..., description="Breve descripción orientativa o explicativa del tema")
+
+
+import time
+import json
+from app.services.llm import LLMService
+
+class FAQsCache:
+    data: list[FAQItem] = []
+    last_updated: float = 0.0
+    expiry_seconds: float = 3600.0  # Cachear durante 1 hora
+
+
 # ── Endpoints ──────────────────────────────────────────────
 
 
@@ -206,12 +223,94 @@ async def clear_history(
 
 @router.get(
     "/popular-questions",
-    response_model=list[str],
+    response_model=list[FAQItem],
     status_code=status.HTTP_200_OK,
     summary="Obtener preguntas frecuentes para sugerencias y popups",
 )
 async def popular_questions(
     db: AsyncSession = Depends(get_db_session),
-) -> list[str]:
-    """Devuelve las preguntas más consultadas por los usuarios."""
-    return await get_popular_queries(db, limit=5)
+) -> list[FAQItem]:
+    """Devuelve las preguntas más consultadas por los usuarios de forma dinámica y semántica."""
+    fallback_faqs = [
+        FAQItem(text="¿Cómo realizo el cierre de ejercicio contable?", desc="Procedimientos de cierre y apertura de la contabilidad."),
+        FAQItem(text="¿Qué requisitos tiene la Ley de Fraude Fiscal / Veri*factu?", desc="Cambios en series, firmas digitales y firmas de registros."),
+        FAQItem(text="¿Cómo hago una copia de seguridad interna?", desc="Resguardar la base de datos de la empresa de forma local."),
+        FAQItem(text="¿Cómo configuro el límite de registros en los GRID?", desc="Optimizar la visualización de registros en las rejillas.")
+    ]
+
+    # Verificar si la caché está vigente
+    now = time.time()
+    if FAQsCache.data and (now - FAQsCache.last_updated < FAQsCache.expiry_seconds):
+        return FAQsCache.data
+
+    try:
+        # 1. Obtener últimas preguntas reales de los usuarios (role == 'user')
+        from sqlalchemy import select
+        from app.db.models import ChatMessage
+        stmt = (
+            select(ChatMessage.content)
+            .where(ChatMessage.role == "user")
+            .order_by(ChatMessage.created_at.desc())
+            .limit(100)
+        )
+        res = await db.execute(stmt)
+        raw_queries = [row[0].strip() for row in res.all() if row[0] and len(row[0].strip()) > 5]
+
+        # Quitar duplicados manteniendo orden
+        unique_queries = []
+        for q in raw_queries:
+            if q not in unique_queries:
+                unique_queries.append(q)
+
+        # Si no hay suficientes preguntas reales distintas, usar fallback
+        if len(unique_queries) < 5:
+            FAQsCache.data = fallback_faqs
+            FAQsCache.last_updated = now
+            return fallback_faqs
+
+        # 2. Llamar al LLM para agrupar y redactar las 4 FAQs principales
+        llm = LLMService()
+        prompt = (
+            "Analiza las siguientes consultas reales realizadas por usuarios de un sistema contable y de facturación. "
+            "Selecciona y resume las 4 preguntas o temáticas más frecuentes o representativas. "
+            "Devuelve la respuesta estrictamente como una lista en formato JSON de objetos que tengan las claves 'text' "
+            "(la pregunta resumida de forma clara e interactiva) y 'desc' (una descripción breve de una frase sobre esa temática). "
+            "Ejemplo de formato esperado:\n"
+            "[\n"
+            "  {\"text\": \"¿Cómo hacer cierre contable?\", \"desc\": \"Guía para cerrar y abrir ejercicios contables.\"}\n"
+            "]\n"
+            "No incluyas formateo markdown, ni el bloque ```json. Devuelve solo el string de JSON. "
+            f"Las consultas de los usuarios son:\n" + "\n".join(f"- {q}" for q in unique_queries[:50])
+        )
+        
+        llm_response = await llm.generate_response(prompt, system_prompt="Eres un analista de datos experto.")
+        
+        # Limpiar posibles bloques de código de la respuesta
+        cleaned_response = llm_response.strip()
+        if cleaned_response.startswith("```"):
+            cleaned_response = cleaned_response.split("\n", 1)[1]
+        if cleaned_response.endswith("```"):
+            cleaned_response = cleaned_response.rsplit("\n", 1)[0]
+        cleaned_response = cleaned_response.replace("```json", "").replace("```", "").strip()
+
+        parsed = json.loads(cleaned_response)
+        if isinstance(parsed, list) and len(parsed) > 0:
+            result_faqs = []
+            for item in parsed[:4]:
+                result_faqs.append(FAQItem(text=item.get("text", ""), desc=item.get("desc", "")))
+            
+            # Completar con fallbacks si devuelve menos de 4
+            while len(result_faqs) < 4 and len(fallback_faqs) > len(result_faqs):
+                result_faqs.append(fallback_faqs[len(result_faqs)])
+                
+            FAQsCache.data = result_faqs
+            FAQsCache.last_updated = now
+            return result_faqs
+
+    except Exception as e:
+        logger.error("Error al generar FAQs dinámicas con el LLM: %s. Usando fallback.", e)
+
+    # Si ocurre cualquier error, caemos en el fallback seguro
+    FAQsCache.data = fallback_faqs
+    FAQsCache.last_updated = now
+    return fallback_faqs

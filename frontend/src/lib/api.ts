@@ -143,10 +143,15 @@ export async function clearChatHistory(sessionId: string): Promise<void> {
   });
 }
 
+export interface FAQItem {
+  text: string;
+  desc: string;
+}
+
 /**
- * Obtiene las preguntas frecuentes del sistema.
+ * Obtiene las preguntas frecuentes del sistema de forma dinámica y estructurada.
  */
-export async function getPopularQuestions(): Promise<string[]> {
+export async function getPopularQuestions(): Promise<FAQItem[]> {
   const response = await fetch(`${BACKEND_BASE_URL}/chat/popular-questions`);
   if (!response.ok) return [];
   return response.json();

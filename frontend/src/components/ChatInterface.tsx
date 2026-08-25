@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { Send, Bot, User, Sparkles, AlertCircle, FileText, ChevronDown, ChevronUp, Loader2, Play, ExternalLink, PlusCircle, RotateCcw } from "lucide-react";
-import { queryChat, getChatHistory, ChatQueryResponse, SourceDocument } from "../lib/api";
+import { queryChat, getChatHistory, ChatQueryResponse, SourceDocument, getPopularQuestions, FAQItem } from "../lib/api";
 import { TrackedDocument } from "./DocumentSidebar";
 import LatencyDisplay from "./LatencyDisplay";
 
@@ -46,6 +46,7 @@ export default function ChatInterface({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openSourcesIdx, setOpenSourcesIdx] = useState<number | null>(null);
+  const [faqs, setFaqs] = useState<FAQItem[]>([]);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Inicializar sessionId y recuperar historial persistente de PostgreSQL
@@ -74,6 +75,15 @@ export default function ChatInterface({
           }
         })
         .catch((e) => console.error("Error al cargar historial previo:", e));
+
+      // Obtener FAQs dinámicas del backend
+      getPopularQuestions()
+        .then((fetchedFaqs) => {
+          if (fetchedFaqs && fetchedFaqs.length > 0) {
+            setFaqs(fetchedFaqs);
+          }
+        })
+        .catch((e) => console.error("Error al cargar FAQs populares:", e));
     }
   }, []);
 
@@ -651,12 +661,12 @@ export default function ChatInterface({
           {/* Tarjetas de Preguntas Frecuentes (FAQs) */}
           {messages.length === 1 && messages[0].id === "welcome" && !loading && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 max-w-2xl mx-auto">
-              {[
+              {(faqs.length > 0 ? faqs : [
                 { text: "¿Cómo realizo el cierre de ejercicio contable?", desc: "Procedimientos de cierre y apertura de la contabilidad." },
                 { text: "¿Qué requisitos tiene la Ley de Fraude Fiscal / Veri*factu?", desc: "Cambios en series, firmas digitales y firmas de registros." },
                 { text: "¿Cómo hago una copia de seguridad interna?", desc: "Resguardar la base de datos de la empresa de forma local." },
                 { text: "¿Cómo configuro el límite de registros en los GRID?", desc: "Optimizar la visualización de registros en las rejillas." }
-              ].map((faq, fIdx) => (
+              ]).map((faq, fIdx) => (
                 <button
                   key={fIdx}
                   onClick={() => handleSend(undefined, faq.text)}
