@@ -74,7 +74,7 @@ class Settings(BaseSettings):
 
     # ── LLM ────────────────────────────────────────────────
     llm_provider: str = "groq"
-    llm_model: str = "llama-3.1-8b-instant"
+    llm_model: str = "openai/gpt-oss-120b"
     openai_api_key: str | None = None
     groq_api_key: str | None = None
     ollama_base_url: str = "http://127.0.0.1:11434"

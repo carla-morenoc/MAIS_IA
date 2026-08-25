@@ -162,11 +162,10 @@ class LLMService:
             "Content-Type": "application/json",
         }
         
-        # Mapear modelos estándar a modelos activos de Groq
-        # Groq no soporta modelos genéricos como 'llama3', requiere nombres específicos
+        # Mapear modelos estándar a modelos activos y soportados en Groq
         groq_model = self.model
-        if groq_model in ["llama3", "llama3.2", "llama", "llama-3.1-8b-instant"]:
-            groq_model = "openai/gpt-oss-20b"
+        if groq_model in ["llama3", "llama", "llama-3", "mock", "llama-3.1-8b-instant"]:
+            groq_model = "openai/gpt-oss-120b"
 
         messages = []
         if system_prompt:
@@ -176,14 +175,17 @@ class LLMService:
         payload = {
             "model": groq_model,
             "messages": messages,
-            "temperature": 0.0,
+            "temperature": 0.1,
+            "max_tokens": 2048,
         }
         async with httpx.AsyncClient(timeout=30.0) as client:
             try:
                 response = await client.post(url, headers=headers, json=payload)
                 response.raise_for_status()
                 data = response.json()
-                return str(data["choices"][0]["message"]["content"]).strip()
+                msg_obj = data["choices"][0]["message"]
+                content = msg_obj.get("content") or msg_obj.get("reasoning") or ""
+                return str(content).strip()
             except Exception as exc:
                 logger.error("Error conectando con Groq: %s", exc)
                 raise
