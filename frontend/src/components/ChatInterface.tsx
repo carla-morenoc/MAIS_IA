@@ -121,14 +121,14 @@ export default function ChatInterface({
     }
   };
 
-  const parseCitations = (text: string, sources: SourceDocument[] | undefined) => {
-    if (!text) return text;
+  const parseCitations = (text: string, sources: SourceDocument[] | undefined): React.ReactNode[] => {
+    if (!text) return [];
     
-    // Regex tolerante a corchetes internos y nombres con paréntesis
-    const citationRegex = /\[([^\]\n]+?\.pdf)(?:[,\s]*(?:pág|pag|página|pagina|p)\.?\s*(\d+))?\]|\[Video:\s*([\s\S]+?),\s*(?:seg|segundo|s)\.?\s*(\d+)\]/gi;
-    const parts = [];
+    // Regex estricta que no captura saltos de línea para PDF y Video
+    const citationRegex = /\[([^\]\n]+?\.pdf)(?:[,\s]*(?:pág|pag|página|pagina|p)\.?\s*(\d+))?\]|\[Video:\s*([^,\n]+?),\s*(?:seg|segundo|s)\.?\s*(\d+)\]/gi;
+    const parts: React.ReactNode[] = [];
     let lastIndex = 0;
-    let match;
+    let match: RegExpExecArray | null;
 
     const normalizeName = (n: string) => n.toLowerCase().replace(/[\+_\s\(\)\[\]\-]/g, "");
 
@@ -140,7 +140,7 @@ export default function ChatInterface({
       }
 
       const isYt = match[3] !== undefined;
-      const filename = isYt ? match[3] : match[1];
+      const filename = (isYt ? match[3] : match[1]) || "";
       const pageNumber = isYt ? parseInt(match[4], 10) : (match[2] ? parseInt(match[2], 10) : 1);
       const fullCitationText = match[0];
 
@@ -222,31 +222,38 @@ export default function ChatInterface({
       lastIndex = citationRegex.lastIndex;
     }
 
+    if (lastIndex === 0) {
+      return [text];
+    }
+
     if (lastIndex < text.length) {
       parts.push(text.substring(lastIndex));
     }
 
-    return parts.length > 0 ? parts : text;
+    return parts;
   };
 
-  const parseBoldText = (text: string, sources?: SourceDocument[]) => {
+  const parseBoldText = (text: string, sources?: SourceDocument[]): React.ReactNode[] => {
     const parts = text.split(/(\*\*.*?\*\*)/g);
+    const result: React.ReactNode[] = [];
 
-    return parts.flatMap((part, index) => {
+    parts.forEach((part, index) => {
       if (part.startsWith("**") && part.endsWith("**")) {
         const boldInner = part.slice(2, -2);
         const parsedInner = parseCitations(boldInner, sources);
 
-        return [
-          <strong key={index} className="font-extrabold text-zinc-50">
-            {Array.isArray(parsedInner) ? parsedInner : [parsedInner]}
-          </strong>,
-        ];
+        result.push(
+          <strong key={`bold-${index}`} className="font-extrabold text-zinc-50">
+            {parsedInner}
+          </strong>
+        );
+      } else if (part) {
+        const parsed = parseCitations(part, sources);
+        result.push(...parsed);
       }
-
-      const parsed = parseCitations(part, sources);
-      return Array.isArray(parsed) ? parsed : [parsed];
     });
+
+    return result;
   };
 
   const renderFormattedText = (text: string, sources?: SourceDocument[]) => {
