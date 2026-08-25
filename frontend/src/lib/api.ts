@@ -43,6 +43,18 @@ export interface ChatQueryResponse {
   sources: SourceDocument[];
   crag_status: "CORRECT" | "AMBIGUOUS" | "NO_DATA_FOUND";
   latency_ms: LatencyBreakdown;
+  session_id: string;
+}
+
+export interface ChatHistoryMessage {
+  id: string;
+  session_id: string;
+  role: "user" | "assistant";
+  content: string;
+  sources?: SourceDocument[];
+  latency_ms?: LatencyBreakdown;
+  crag_status?: "CORRECT" | "AMBIGUOUS" | "NO_DATA_FOUND";
+  created_at: string;
 }
 
 export interface HealthResponse {
@@ -86,9 +98,13 @@ export async function getDocumentStatus(documentId: string): Promise<DocumentSta
 }
 
 /**
- * Envía una consulta de RAG al motor de chat.
+ * Envía una consulta de RAG al motor de chat con memoria conversacional.
  */
-export async function queryChat(query: string, documentIds: string[]): Promise<ChatQueryResponse> {
+export async function queryChat(
+  query: string, 
+  documentIds: string[], 
+  sessionId?: string
+): Promise<ChatQueryResponse> {
   const response = await fetch(`${BACKEND_BASE_URL}/chat/query`, {
     method: "POST",
     headers: {
@@ -97,14 +113,42 @@ export async function queryChat(query: string, documentIds: string[]): Promise<C
     body: JSON.stringify({
       query,
       document_ids: documentIds,
+      session_id: sessionId || undefined,
     }),
   });
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.detail || "Error al procesar la consulta en el motor CRAG");
+    throw new Error(errorData.detail || "Error al procesar la consulta en el chat");
   }
 
+  return response.json();
+}
+
+/**
+ * Recupera el historial completo de mensajes para una sesión.
+ */
+export async function getChatHistory(sessionId: string): Promise<ChatHistoryMessage[]> {
+  const response = await fetch(`${BACKEND_BASE_URL}/chat/history/${sessionId}`);
+  if (!response.ok) return [];
+  return response.json();
+}
+
+/**
+ * Limpia el historial de una sesión.
+ */
+export async function clearChatHistory(sessionId: string): Promise<void> {
+  await fetch(`${BACKEND_BASE_URL}/chat/history/${sessionId}`, {
+    method: "DELETE",
+  });
+}
+
+/**
+ * Obtiene las preguntas frecuentes del sistema.
+ */
+export async function getPopularQuestions(): Promise<string[]> {
+  const response = await fetch(`${BACKEND_BASE_URL}/chat/popular-questions`);
+  if (!response.ok) return [];
   return response.json();
 }
 

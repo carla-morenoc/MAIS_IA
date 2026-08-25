@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { Send, Bot, User, Sparkles, AlertCircle, FileText, ChevronDown, ChevronUp, Loader2, Play, ExternalLink } from "lucide-react";
-import { queryChat, ChatQueryResponse, SourceDocument } from "../lib/api";
+import { Send, Bot, User, Sparkles, AlertCircle, FileText, ChevronDown, ChevronUp, Loader2, Play, ExternalLink, PlusCircle, RotateCcw } from "lucide-react";
+import { queryChat, getChatHistory, ChatQueryResponse, SourceDocument } from "../lib/api";
 import { TrackedDocument } from "./DocumentSidebar";
 import LatencyDisplay from "./LatencyDisplay";
 
@@ -41,15 +41,60 @@ export default function ChatInterface({
       text: "¡Hola! Soy Maisito, tu asistente inteligente. Sube un documento PDF o selecciona un videotutorial y hazme cualquier consulta para empezar.",
     },
   ]);
+  const [sessionId, setSessionId] = useState<string>("");
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openSourcesIdx, setOpenSourcesIdx] = useState<number | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Inicializar sessionId y recuperar historial persistente de PostgreSQL
+  useEffect(() => {
+    let sid = "";
+    if (typeof window !== "undefined") {
+      sid = localStorage.getItem("maisia_session_id") || "";
+      if (!sid) {
+        sid = (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : `sess_${Date.now()}`;
+        localStorage.setItem("maisia_session_id", sid);
+      }
+      setSessionId(sid);
+
+      getChatHistory(sid)
+        .then((history) => {
+          if (history && history.length > 0) {
+            const loadedMessages: Message[] = history.map((m) => ({
+              id: m.id,
+              sender: m.role === "user" ? "user" : "bot",
+              text: m.content,
+              sources: m.sources,
+              cragStatus: m.crag_status,
+              latencyMs: m.latency_ms,
+            }));
+            setMessages(loadedMessages);
+          }
+        })
+        .catch((e) => console.error("Error al cargar historial previo:", e));
+    }
+  }, []);
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  const handleNewConversation = () => {
+    const newSid = (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : `sess_${Date.now()}`;
+    if (typeof window !== "undefined") {
+      localStorage.setItem("maisia_session_id", newSid);
+    }
+    setSessionId(newSid);
+    setMessages([
+      {
+        id: "welcome",
+        sender: "bot",
+        text: "¡Hola! Soy Maisito, tu asistente inteligente. Sube un documento PDF o selecciona un videotutorial y hazme cualquier consulta para empezar.",
+      },
+    ]);
+  };
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,8 +124,15 @@ export default function ChatInterface({
     setLoading(true);
 
     try {
-      const res = await queryChat(userQuery, selectedDocIds);
+      const res = await queryChat(userQuery, selectedDocIds, sessionId);
       
+      if (res.session_id && res.session_id !== sessionId) {
+        setSessionId(res.session_id);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("maisia_session_id", res.session_id);
+        }
+      }
+
       const botMsg: Message = {
         id: `bot-${Date.now()}`,
         sender: "bot",
@@ -358,7 +410,16 @@ export default function ChatInterface({
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          {/* Botón para Iniciar Nueva Conversación / Limpiar Contexto */}
+          <button
+            onClick={handleNewConversation}
+            className="text-xs px-3 py-1.5 rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800 hover:border-zinc-700 transition-all duration-150 flex items-center gap-1.5 font-medium cursor-pointer shadow-sm"
+            title="Iniciar una conversación nueva con contexto limpio"
+          >
+            <PlusCircle className="h-3.5 w-3.5 text-blue-400" />
+            <span>Nueva Consulta</span>
+          </button>
 
           {/* Botón Global para Activar / Desactivar Resaltado de Citas */}
           <button

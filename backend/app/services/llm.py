@@ -74,21 +74,29 @@ class LLMService:
         else:
             raise ValueError(f"Proveedor de LLM no soportado: '{self.provider}'")
 
-    async def rewrite_query(self, query: str) -> str:
-        """Reescribe una consulta de usuario para optimizar la recuperación semántica."""
+    async def rewrite_query(self, query: str, history: list[dict[str, str]] | None = None) -> str:
+        """Reescribe una consulta de usuario para optimizar la recuperación semántica con contexto conversacional."""
         if self.provider == "mock":
             # Mock de reescritura simple agregando sinónimos de RAG
             logger.info("Mocking query rewrite...")
             return f"{query} Hybrid Search Retrieval Corrective RAG"
 
+        history_str = ""
+        if history:
+            history_lines = [
+                f"{('Usuario' if t.get('role') == 'user' else 'Maisito')}: {t.get('content', '')}"
+                for t in history[-4:]
+            ]
+            history_str = f"Historial de conversación previo:\n" + "\n".join(history_lines) + "\n\n"
+
         system_prompt = (
             "Eres un asistente de recuperación de información de nivel experto. "
-            "Tu tarea es analizar la consulta del usuario y reescribirla de forma clara, "
-            "eliminando ambigüedades y añadiendo términos clave relacionados para mejorar "
-            "la búsqueda semántica y de palabras clave. "
-            "Devuelve ÚNICAMENTE la consulta reescrita, sin introducciones ni comentarios."
+            "Tu tarea es analizar la consulta del usuario (y el historial si lo hay) y reescribirla de forma clara, "
+            "eliminando ambigüedades, reemplazando pronombres ('eso', 'el anterior', 'lo') por los conceptos reales "
+            "y añadiendo términos clave relacionados de los programas MAIS para mejorar la búsqueda semántica. "
+            "Devuelve ÚNICAMENTE la consulta reescrita, sin introducciones, sin explicaciones y sin comillas."
         )
-        prompt = f"Consulta original: {query}"
+        prompt = f"{history_str}Consulta del usuario a reformular: {query}"
         
         try:
             rewritten = await self.generate_response(prompt, system_prompt)

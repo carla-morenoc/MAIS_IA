@@ -50,10 +50,12 @@ class CRAGEngine:
     async def execute_query(
         self, 
         query: str, 
-        document_ids: list[str] | None = None
+        document_ids: list[str] | None = None,
+        history: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
         """
-        Ejecuta el flujo completo de Corrective RAG (CRAG) midiendo latencias individuales.
+        Ejecuta el flujo completo de Corrective RAG (CRAG) midiendo latencias individuales
+        e integrando memoria conversacional del historial previo.
         """
         start_total = time.perf_counter()
         latencies = {
@@ -68,7 +70,7 @@ class CRAGEngine:
         
         # Ejecutar búsqueda por lenguaje natural completo y búsqueda por entidades en paralelo
         search_query = clean_search_query(query)
-        logger.info("Consulta Natural: '%s' | Consulta Entidades: '%s'", query, search_query)
+        logger.info("Consulta Natural: '%s' | Consulta Entidades: '%s' | Historial turnos: %d", query, search_query, len(history) if history else 0)
 
         task_orig = hybrid_search(query, document_ids=document_ids, top_k=30)
         
@@ -132,7 +134,7 @@ class CRAGEngine:
             crag_status = "AMBIGUOUS"
             
             # Reescribir la query usando el LLM
-            query_used = await self.llm.rewrite_query(query)
+            query_used = await self.llm.rewrite_query(query, history=history)
             
             # Reintentar búsqueda híbrida asíncrona con la query optimizada
             retry_candidates = await hybrid_search(query_used, document_ids=document_ids, top_k=25)
@@ -176,9 +178,18 @@ class CRAGEngine:
                 )
             context_str = "\n---\n".join(context_blocks)
 
+            # Formatear historial conversacional previo si existe
+            history_str = ""
+            if history:
+                history_lines = []
+                for turn in history[-4:]:
+                    speaker = "Usuario" if turn.get("role") == "user" else "Maisito"
+                    history_lines.append(f"{speaker}: {turn.get('content', '')}")
+                history_str = f"Historial reciente de la conversación:\n" + "\n".join(history_lines) + "\n\n"
+
             system_prompt = (
                 "Eres Maisito, el asistente virtual oficial, cercano y amigable de MAIS, una empresa de informática.\n"
-                "Tu objetivo es guiar y ayudar a los clientes con sus dudas sobre el funcionamiento de nuestros programas y manuales de manera atenta, educada y profesional. Evita mencionar repetidamente o de forma innecesaria las palabras 'ERP' o 'software de gestión' en tus respuestas. Céntrate en responder directamente a la consulta del usuario.\n\n"
+                "Tu objetivo es guiar y ayudar a los clientes con sus dudas sobre el funcionamiento de nuestros programas y manuales de manera atenta, educada y profesional. Evita mencionar repetidamente o de forma innecesaria las palabras 'ERP' o 'software de gestión' en tus respuestas. Céntrate en responder directamente a la consulta del usuario, manteniendo la continuidad si la pregunta hace referencia a lo hablado anteriormente.\n\n"
                 "REGLAS ESTRICTAS DE FORMATO Y CITACIÓN:\n"
                 "1. CITAS INLINE EN CADA PÁRRAFO: Cada párrafo o dato de tu respuesta DEBE incluir obligatoriamente su cita correspondiente al final de la frase o párrafo. Si procede de un manual PDF, cítala como [nombre_archivo.pdf, pág. X]. Si procede de un videotutorial de YouTube, cítala como [Video: Nombre del video, seg. X].\n"
                 "2. INTEGRACIÓN MULTIFUENTE (PDFs + VIDEOS): Cuando el contexto contenga fragmentos tanto de manuales PDF como de videotutoriales de YouTube, integra y complementa armónicamente la información de ambas fuentes en tu explicación, contrastando los procedimientos técnicos del PDF con los consejos prácticos del videotutorial y citando cada uno en su sitio correspondiente.\n"
@@ -188,7 +199,8 @@ class CRAGEngine:
             )
 
             prompt = (
-                f"Consulta del usuario: {query}\n\n"
+                f"{history_str}"
+                f"Consulta actual del usuario: {query}\n\n"
                 f"Contexto disponible:\n{context_str}\n\n"
                 f"Respuesta clara y completa con citas intercaladas en cada párrafo ([archivo.pdf, pág. X] o [Video: Nombre, seg. X]):"
             )

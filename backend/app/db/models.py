@@ -17,6 +17,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     Integer,
+    JSON,
     String,
     Text,
     func,
@@ -106,3 +107,96 @@ class Document(Base):
 
     def __repr__(self) -> str:
         return f"<Document(id={self.id}, filename={self.filename!r}, status={self.status.value})>"
+
+
+class ChatSession(Base):
+    """
+    Representa una conversación o hilo de diálogo persistente.
+    Identificada por un session_id generado en el navegador/cliente.
+    """
+
+    __tablename__ = "chat_sessions"
+
+    id: Mapped[str] = mapped_column(
+        String(64),
+        primary_key=True,
+        comment="Identificador único de la sesión (UUID string)",
+    )
+    title: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        default="Nueva Consulta",
+        comment="Título descriptivo inferido o por defecto",
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        comment="Fecha de inicio de la conversación",
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+        comment="Fecha del último mensaje enviado",
+    )
+
+
+class ChatMessage(Base):
+    """
+    Representa cada turno o mensaje intercambiado en una sesión de chat.
+    Almacena el rol (user/assistant), contenido, citas y métricas.
+    """
+
+    __tablename__ = "chat_messages"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        comment="Identificador único del mensaje",
+    )
+    session_id: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        index=True,
+        comment="ID de la sesión a la que pertenece este mensaje",
+    )
+    role: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        comment="Rol del emisor: 'user' o 'assistant'",
+    )
+    content: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        comment="Texto del mensaje redactado",
+    )
+    sources: Mapped[dict | list | None] = mapped_column(
+        JSON,
+        nullable=True,
+        default=None,
+        comment="Lista de fuentes y citas utilizadas",
+    )
+    latency_ms: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+        default=None,
+        comment="Desglose de latencias CRAG",
+    )
+    crag_status: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+        default=None,
+        comment="Estado del flujo CRAG",
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        comment="Fecha y hora de creación del mensaje",
+    )
+
+    def __repr__(self) -> str:
+        return f"<ChatMessage(id={self.id}, session_id={self.session_id!r}, role={self.role!r})>"
