@@ -349,18 +349,35 @@ def process_youtube_video_task(self, document_id: str):
                 if cookies_path:
                     logger.info(f"Usando cookies de YouTube desde: {cookies_path}")
 
-                # Instanciar e invocar el método fetch compatible con la versión de la librería
+                # Instanciar e invocar el método fetch compatible con la versión de la librería y pasarle el cliente HTTP con cookies
                 import time
                 import random
+                import requests
+                from http.cookiejar import MozillaCookieJar
+
                 sleep_time = random.randint(10, 20)
                 logger.info(f"Pausando la descarga durante {sleep_time} segundos para evitar bloqueos de IP...")
                 time.sleep(sleep_time)
 
-                ytt = YouTubeTranscriptApi()
+                session_http = requests.Session()
+                session_http.headers.update({
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept-Language': 'es-ES,es;q=0.9',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Origin': 'https://www.youtube.com',
+                    'Referer': 'https://www.youtube.com/'
+                })
+
                 if cookies_path:
-                    transcript = ytt.fetch(video_id, languages=['es', 'es-ES', 'es-419', 'en'], cookies=cookies_path)
-                else:
-                    transcript = ytt.fetch(video_id, languages=['es', 'es-ES', 'es-419', 'en'])
+                    try:
+                        cookie_jar = MozillaCookieJar(cookies_path)
+                        cookie_jar.load(ignore_discard=True, ignore_expires=True)
+                        session_http.cookies = cookie_jar
+                    except Exception as e:
+                        logger.warning(f"Error al cargar las cookies desde MozillaCookieJar: {e}")
+
+                ytt = YouTubeTranscriptApi(http_client=session_http)
+                transcript = ytt.fetch(video_id, languages=['es', 'es-ES', 'es-419', 'en'])
             except Exception as tr_exc:
                 # Si YouTube no tiene transcripción o persiste el error, marcamos como FAILED
                 logger.warning(f"Vídeo {video_id} sin transcripción disponible: {tr_exc}")

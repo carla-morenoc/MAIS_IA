@@ -96,18 +96,18 @@ export default function ChatInterface({
     ]);
   };
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || loading) return;
+  const handleSend = async (e?: React.FormEvent, customQuery?: string) => {
+    if (e) e.preventDefault();
+    const queryToSend = customQuery ? customQuery.trim() : input.trim();
+    if (!queryToSend || loading) return;
 
-    const userQuery = input.trim();
     setInput("");
     setError(null);
 
     const userMsg: Message = {
       id: `user-${Date.now()}`,
       sender: "user",
-      text: userQuery,
+      text: queryToSend,
     };
     setMessages((prev) => [...prev, userMsg]);
 
@@ -124,7 +124,7 @@ export default function ChatInterface({
     setLoading(true);
 
     try {
-      const res = await queryChat(userQuery, selectedDocIds, sessionId);
+      const res = await queryChat(queryToSend, selectedDocIds, sessionId);
       
       if (res.session_id && res.session_id !== sessionId) {
         setSessionId(res.session_id);
@@ -647,6 +647,31 @@ export default function ChatInterface({
               </div>
             );
           })}
+
+          {/* Tarjetas de Preguntas Frecuentes (FAQs) */}
+          {messages.length === 1 && messages[0].id === "welcome" && !loading && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 max-w-2xl mx-auto">
+              {[
+                { text: "¿Cómo realizo el cierre de ejercicio contable?", desc: "Procedimientos de cierre y apertura de la contabilidad." },
+                { text: "¿Qué requisitos tiene la Ley de Fraude Fiscal / Veri*factu?", desc: "Cambios en series, firmas digitales y firmas de registros." },
+                { text: "¿Cómo hago una copia de seguridad interna?", desc: "Resguardar la base de datos de la empresa de forma local." },
+                { text: "¿Cómo configuro el límite de registros en los GRID?", desc: "Optimizar la visualización de registros en las rejillas." }
+              ].map((faq, fIdx) => (
+                <button
+                  key={fIdx}
+                  onClick={() => handleSend(undefined, faq.text)}
+                  className="bg-zinc-900/60 border border-zinc-800/80 hover:bg-zinc-850 hover:border-blue-500/50 text-zinc-300 hover:text-zinc-100 rounded-xl p-4 transition-all duration-200 cursor-pointer shadow-sm text-left flex flex-col gap-1 group active:scale-[0.98] outline-none"
+                >
+                  <span className="font-semibold text-xs text-blue-400 group-hover:text-blue-300 flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5 text-blue-500 group-hover:animate-pulse" />
+                    Pregunta sugerida
+                  </span>
+                  <span className="font-medium text-sm mt-0.5 leading-snug">{faq.text}</span>
+                  <span className="text-[11px] text-zinc-500 group-hover:text-zinc-400 mt-1 leading-normal">{faq.desc}</span>
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Loader del Bot */}
           {loading && (
