@@ -366,16 +366,67 @@ async def get_youtube_channel_info():
     }
 
 
+async def get_youtube_video_title(video_url: str) -> str:
+    """Obtiene el título público de un vídeo de YouTube mediante oembed."""
+    try:
+        oembed_url = f"https://www.youtube.com/oembed?url={video_url}&format=json"
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            res = await client.get(oembed_url)
+            if res.status_code == 200:
+                return res.json().get("title", "Vídeo de YouTube")
+    except Exception:
+        pass
+    return "Vídeo de YouTube"
+
+
 @router.post(
     "/sync-youtube",
     status_code=status.HTTP_200_OK,
     summary="Sincronizar dinámicamente videotutoriales de YouTube",
-    description="Consulta el canal de YouTube, registra vídeos nuevos e inicia su indexación."
+    description="Consulta el canal de YouTube o procesa un vídeo individual directo e inicia su indexación."
 )
 async def sync_youtube_videos(
     payload: SyncYoutubeRequest | None = None,
     session: AsyncSession = Depends(get_db_session),
 ):
+    from app.workers.ingestion import process_youtube_video_task
+
+    # 1. Comprobar si es una URL de un vídeo individual
+    if payload and payload.channel_url:
+        video_match = re.search(r"(?:v=|\/v\/|embed\/|youtu\.be\/)([\w-]{11})", payload.channel_url)
+        if video_match:
+            video_id = video_match.group(1)
+            video_url = f"https://www.youtube.com/watch?v={video_id}"
+            
+            # Comprobar si ya existe
+            result = await session.execute(select(Document).where(Document.file_path == video_url))
+            existe = result.scalar_one_or_none()
+            if existe:
+                if existe.status == DocumentStatus.FAILED:
+                    # Permitir reintentar si falló antes
+                    existe.status = DocumentStatus.PENDING
+                    await session.flush()
+                    process_youtube_video_task.delay(str(existe.id))
+                    return {"status": "success", "message": f"Vídeo '{existe.filename}' reencolado para indexación.", "added": 1}
+                return {"status": "success", "message": f"El vídeo '{existe.filename}' ya estaba indexado.", "added": 0}
+            
+            # Obtener título real del vídeo
+            title = await get_youtube_video_title(video_url)
+            new_id = uuid.uuid4()
+            nuevo_doc = Document(
+                id=new_id,
+                filename=title,
+                file_path=video_url,
+                document_type="youtube",
+                status=DocumentStatus.PENDING
+            )
+            session.add(nuevo_doc)
+            await session.flush()
+            
+            process_youtube_video_task.delay(str(new_id))
+            return {"status": "success", "message": f"Vídeo '{title}' encolado con éxito para indexación.", "added": 1}
+
+    # 2. Si no es un vídeo individual, realizar sincronización del canal por feed RSS XML
     channel_id = settings.youtube_channel_id
     if payload and payload.channel_url:
         match = re.search(r"channel/(UC[\w-]+)", payload.channel_url)
@@ -396,8 +447,6 @@ async def sync_youtube_videos(
             
     root = ET.fromstring(r.text)
     ns = {'atom': 'http://www.w3.org/2005/Atom', 'yt': 'http://www.youtube.com/xml/schemas/2015'}
-    
-    from app.workers.ingestion import process_youtube_video_task
     
     added_count = 0
     for entry in root.findall('atom:entry', ns):
