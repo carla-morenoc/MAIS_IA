@@ -93,3 +93,35 @@ Una vez arrancado, entra en [http://localhost:3000](http://localhost:3000) para 
 * **Panel de Qdrant (Base Vectorial):** [http://localhost:6333/dashboard](http://localhost:6333/dashboard) (colección `aegis_chunks`).
 * **Documentación Interactiva de la API (Swagger):** [http://localhost:8000/docs](http://localhost:8000/docs).
 * **Verificación de Salud:** `GET http://localhost:8000/api/v1/health`.
+
+---
+
+## 🛠️ Solución de Problemas en Indexación de Vídeos (YouTube)
+
+YouTube bloquea de forma muy agresiva las solicitudes automatizadas sin cookies de sesión (dando el error `IP blocked / Rate Limit` en los logs del worker de Celery). Para solucionarlo o saltártelo si algún vídeo falla:
+
+### Opción A: Configurar Cookies de Sesión (Recomendado)
+1. Instala la extensión **[Cookie-Editor](https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhgoadkfgghfacnekggghhj)** en Chrome/Edge.
+2. Ve a [youtube.com](https://www.youtube.com) (con tu cuenta logueada).
+3. Abre la extensión, haz clic en **Export** y selecciona **Netscape** (copiará las cookies al portapapeles).
+4. Crea un archivo llamado `youtube_cookies.txt` en la carpeta `backend/` y pega el contenido.
+5. El worker de Celery leerá las cookies automáticamente en la siguiente descarga, evitando el baneo de IP.
+
+### Opción B: Indexación Manual por Transcripción
+Si prefieres indexar un vídeo pegando su transcripción manualmente usando el formato estándar de YouTube (`0:00 \n Texto`):
+1. Copia la transcripción desde YouTube (*Mostrar transcripción*) o extráela de Gemini con `@YouTube`.
+2. Guarda el texto de la transcripción en un archivo temporal llamado `temp_trans.txt` en `backend/scratch/`.
+3. Ejecuta el indexador manual con el **ID del documento** correspondiente:
+   ```cmd
+   cd backend
+   python -c "import sys; sys.path.append('scratch'); from index_manual_transcript import index_manual_video; text = open('scratch/temp_trans.txt', encoding='utf-8').read(); index_manual_video('ID_DEL_DOCUMENTO', text)"
+   ```
+
+### Recargar Documentos Atascados
+Si tras un reinicio del backend o una caída del sistema algunos archivos o vídeos se han quedado atascados en estado `PROCESSING` o `PENDING` de forma perpetua:
+```cmd
+cd backend
+python scratch/requeue_processing.py
+```
+Este script buscará los documentos pendientes o a medias, restablecerá su estado y los volverá a enviar a la cola de Celery automáticamente.
+
