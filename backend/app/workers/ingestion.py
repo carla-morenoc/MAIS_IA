@@ -335,38 +335,32 @@ def process_youtube_video_task(self, document_id: str):
             logger.info(f"Descargando transcripción para video_id: {video_id}")
             
             try:
-                # Comprobar si existe un archivo de cookies para evitar el baneo de IP de YouTube (Rate Limit)
-                backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                # Comprobar si existe un archivo de cookies en la carpeta backend/ real (3 niveles arriba)
+                app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                backend_dir = os.path.dirname(app_dir)
                 cookies_file = os.path.join(backend_dir, "youtube_cookies.txt")
                 if not os.path.exists(cookies_file):
                     cookies_file = os.path.join(backend_dir, "cookies.txt")
+                if not os.path.exists(cookies_file):
+                    # Fallback a app/ por si acaso
+                    cookies_file = os.path.join(app_dir, "youtube_cookies.txt")
 
                 cookies_path = cookies_file if os.path.exists(cookies_file) else None
                 if cookies_path:
                     logger.info(f"Usando cookies de YouTube desde: {cookies_path}")
 
-                try:
-                    # 1. Intentar buscar la transcripción deseada listando las disponibles
-                    transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-                    try:
-                        transcript_obj = transcript_list.find_transcript(['es', 'es-ES', 'es-419', 'en'])
-                    except Exception:
-                        transcript_obj = transcript_list.find_generated_transcript(['es', 'es-ES', 'es-419', 'en'])
-                    
-                    if cookies_path:
-                        try:
-                            transcript = transcript_obj.fetch(cookies=cookies_path)
-                        except TypeError:
-                            transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=[transcript_obj.language_code], cookies=cookies_path)
-                    else:
-                        transcript = transcript_obj.fetch()
-                except Exception as list_exc:
-                    logger.warning(f"Fallo al listar transcripciones para {video_id}: {list_exc}. Usando get_transcript directo...")
-                    # 2. Respaldo clásico con get_transcript directo
-                    if cookies_path:
-                        transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['es', 'es-ES', 'es-419', 'en'], cookies=cookies_path)
-                    else:
-                        transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['es', 'es-ES', 'es-419', 'en'])
+                # Instanciar e invocar el método fetch compatible con la versión de la librería
+                import time
+                import random
+                sleep_time = random.randint(10, 20)
+                logger.info(f"Pausando la descarga durante {sleep_time} segundos para evitar bloqueos de IP...")
+                time.sleep(sleep_time)
+
+                ytt = YouTubeTranscriptApi()
+                if cookies_path:
+                    transcript = ytt.fetch(video_id, languages=['es', 'es-ES', 'es-419', 'en'], cookies=cookies_path)
+                else:
+                    transcript = ytt.fetch(video_id, languages=['es', 'es-ES', 'es-419', 'en'])
             except Exception as tr_exc:
                 # Si YouTube no tiene transcripción o persiste el error, marcamos como FAILED
                 logger.warning(f"Vídeo {video_id} sin transcripción disponible: {tr_exc}")
