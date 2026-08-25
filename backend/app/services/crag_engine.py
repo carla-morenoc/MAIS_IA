@@ -164,10 +164,11 @@ class CRAGEngine:
             # Construir contexto para el LLM con etiquetas explícitas de cita
             context_blocks = []
             for i, chunk in enumerate(final_chunks, start=1):
+                clean_filename = chunk['filename'].replace('[', '(').replace(']', ')')
                 if chunk.get("type") == "youtube":
-                    cita = f"[Video: {chunk['filename']}, seg. {chunk['page_number']}]"
+                    cita = f"[Video: {clean_filename}, seg. {chunk['page_number']}]"
                 else:
-                    cita = f"[{chunk['filename']}, pág. {chunk['page_number']}]"
+                    cita = f"[{clean_filename}, pág. {chunk['page_number']}]"
                 
                 context_blocks.append(
                     f"Cita requerida para este texto: {cita}\n"

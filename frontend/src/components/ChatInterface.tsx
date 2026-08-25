@@ -100,12 +100,16 @@ export default function ChatInterface({
 
   const openYoutubeUrl = (videoIdOrDocId: string, seconds: number, filename?: string) => {
     let ytUrl = "";
-    if (videoIdOrDocId && !videoIdOrDocId.includes("-")) {
-      // Es un videoId de YouTube válido
+    if (videoIdOrDocId && !videoIdOrDocId.includes("-") && videoIdOrDocId.length === 11) {
+      // Es un ID directo de YouTube (11 caracteres)
       ytUrl = `https://www.youtube.com/watch?v=${videoIdOrDocId}&t=${seconds}s`;
     } else {
-      const doc = selectedDocuments?.find(d => d.id === videoIdOrDocId);
-      if (doc?.file_path) {
+      const doc = selectedDocuments?.find(d => 
+        d.id === videoIdOrDocId || 
+        (filename && d.filename.toLowerCase().includes(filename.toLowerCase())) ||
+        (filename && filename.toLowerCase().includes(d.filename.toLowerCase()))
+      );
+      if (doc?.file_path && doc.file_path.includes("youtube.com")) {
         const separator = doc.file_path.includes("?") ? "&" : "?";
         ytUrl = `${doc.file_path}${separator}t=${seconds}s`;
       } else if (filename) {
@@ -120,12 +124,13 @@ export default function ChatInterface({
   const parseCitations = (text: string, sources: SourceDocument[] | undefined) => {
     if (!text) return text;
     
-    const citationRegex = /\[([^]]+?\.pdf)(?:[,\s]*(?:pág|pag|página|pagina|p)\.?\s*(\d+))?\]|\[Video:\s*(.+?),\s*(?:seg|segundo|s)\.?\s*(\d+)\]/gi;
+    // Regex tolerante a corchetes internos y nombres con paréntesis
+    const citationRegex = /\[([^\]\n]+?\.pdf)(?:[,\s]*(?:pág|pag|página|pagina|p)\.?\s*(\d+))?\]|\[Video:\s*([\s\S]+?),\s*(?:seg|segundo|s)\.?\s*(\d+)\]/gi;
     const parts = [];
     let lastIndex = 0;
     let match;
 
-    const normalizeName = (n: string) => n.toLowerCase().replace(/[\+_\s]/g, "");
+    const normalizeName = (n: string) => n.toLowerCase().replace(/[\+_\s\(\)\[\]\-]/g, "");
 
     while ((match = citationRegex.exec(text)) !== null) {
       const matchIndex = match.index;
