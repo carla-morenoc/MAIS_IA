@@ -173,11 +173,36 @@ export default function ChatInterface({
     }
   };
 
+  const parseTimeToSeconds = (timeStr: string): number => {
+    if (!timeStr) return 0;
+    if (!timeStr.includes(":")) {
+      return parseInt(timeStr, 10) || 0;
+    }
+    const parts = timeStr.split(":").map((p) => parseInt(p, 10) || 0);
+    if (parts.length === 3) {
+      return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    } else if (parts.length === 2) {
+      return parts[0] * 60 + parts[1];
+    }
+    return parseInt(timeStr, 10) || 0;
+  };
+
+  const formatSecondsToTime = (totalSeconds: number): string => {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+    }
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  };
+
   const parseCitations = (text: string, sources: SourceDocument[] | undefined): React.ReactNode[] => {
     if (!text) return [];
     
-    // Regex estricta que no captura saltos de línea para PDF y Video
-    const citationRegex = /\[([^\]\n]+?\.pdf)(?:[,\s]*(?:pág|pag|página|pagina|p)\.?\s*(\d+))?\]|\[Video:\s*([^,\n]+?),\s*(?:seg|segundo|s)\.?\s*(\d+)\]/gi;
+    // Regex tolerante a formatos de tiempo: min. MM:SS, seg. X, o MM:SS
+    const citationRegex = /\[([^\]\n]+?\.pdf)(?:[,\s]*(?:pág|pag|página|pagina|p)\.?\s*(\d+))?\]|\[Video:\s*([^,\n]+?),\s*(?:min\.|minuto|min|seg\.|segundo|seg|s)?\s*(\d+(?::\d+){0,2})\]/gi;
     const parts: React.ReactNode[] = [];
     let lastIndex = 0;
     let match: RegExpExecArray | null;
@@ -193,8 +218,10 @@ export default function ChatInterface({
 
       const isYt = match[3] !== undefined;
       const filename = (isYt ? match[3] : match[1]) || "";
-      const pageNumber = isYt ? parseInt(match[4], 10) : (match[2] ? parseInt(match[2], 10) : 1);
-      const fullCitationText = match[0];
+      const rawTimeStr = isYt ? match[4] : (match[2] || "1");
+      const pageNumber = isYt ? parseTimeToSeconds(rawTimeStr) : (parseInt(rawTimeStr, 10) || 1);
+      const timeFormatted = isYt ? formatSecondsToTime(pageNumber) : "";
+      const displayCitationText = isYt ? `[Video: ${filename}, min. ${timeFormatted}]` : match[0];
 
       let matchingSource = sources?.find((src) => {
         if (isYt) {
@@ -250,10 +277,10 @@ export default function ChatInterface({
             key={`cite-${matchIndex}`}
             onClick={() => openYoutubeUrl(videoId || docId, pageNumber, targetFilename)}
             className="px-2 py-0.5 mx-1 rounded-md bg-red-600/90 hover:bg-red-500 active:bg-red-700 text-white font-semibold text-xs transition-all duration-150 cursor-pointer inline-flex items-center gap-1.5 focus:outline-none shadow-sm hover:shadow-red-500/20 border border-red-400/30"
-            title={`Abrir vídeo en YouTube en el segundo ${pageNumber}`}
+            title={`Abrir vídeo en YouTube en el minuto ${timeFormatted}`}
           >
             <Play className="h-3.5 w-3.5 shrink-0 text-red-200" />
-            <span>{fullCitationText}</span>
+            <span>{displayCitationText}</span>
             <ExternalLink className="h-2.5 w-2.5 opacity-70" />
           </button>
         );
@@ -266,7 +293,7 @@ export default function ChatInterface({
             title={`Abrir página ${pageNumber} en el visor de ${targetFilename}`}
           >
             <FileText className="h-3.5 w-3.5 shrink-0 text-blue-200" />
-            <span>{fullCitationText}</span>
+            <span>{displayCitationText}</span>
           </button>
         );
       }

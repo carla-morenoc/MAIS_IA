@@ -168,7 +168,12 @@ class CRAGEngine:
             for i, chunk in enumerate(final_chunks, start=1):
                 clean_filename = chunk['filename'].replace('[', '(').replace(']', ')')
                 if chunk.get("type") == "youtube":
-                    cita = f"[Video: {clean_filename}, seg. {chunk['page_number']}]"
+                    raw_secs = chunk['page_number']
+                    hrs = raw_secs // 3600
+                    mins = (raw_secs % 3600) // 60
+                    secs = raw_secs % 60
+                    time_label = f"{hrs}:{mins:02d}:{secs:02d}" if hrs > 0 else f"{mins}:{secs:02d}"
+                    cita = f"[Video: {clean_filename}, min. {time_label}]"
                 else:
                     cita = f"[{clean_filename}, pág. {chunk['page_number']}]"
                 
