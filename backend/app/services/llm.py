@@ -83,10 +83,13 @@ class LLMService:
 
         history_str = ""
         if history:
-            history_lines = [
-                f"{('Usuario' if t.get('role') == 'user' else 'Maisito')}: {t.get('content', '')}"
-                for t in history[-4:]
-            ]
+            history_lines = []
+            for t in history[-4:]:
+                role_label = 'Usuario' if t.get('role') == 'user' else 'Maisito'
+                content = t.get('content', '')
+                if len(content) > 400:
+                    content = content[:400] + "..."
+                history_lines.append(f"{role_label}: {content}")
             history_str = f"Historial de conversación previo:\n" + "\n".join(history_lines) + "\n\n"
 
         system_prompt = (

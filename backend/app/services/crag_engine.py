@@ -177,9 +177,13 @@ class CRAGEngine:
                 else:
                     cita = f"[{clean_filename}, pág. {chunk['page_number']}]"
                 
+                snippet_text = chunk['text']
+                if len(snippet_text) > 1200:
+                    snippet_text = snippet_text[:1200] + "..."
+                
                 context_blocks.append(
                     f"Cita requerida para este texto: {cita}\n"
-                    f"Texto: {chunk['text']}\n"
+                    f"Texto: {snippet_text}\n"
                 )
             context_str = "\n---\n".join(context_blocks)
 
@@ -189,7 +193,10 @@ class CRAGEngine:
                 history_lines = []
                 for turn in history[-4:]:
                     speaker = "Usuario" if turn.get("role") == "user" else "Maisito"
-                    history_lines.append(f"{speaker}: {turn.get('content', '')}")
+                    content = turn.get('content', '')
+                    if len(content) > 400:
+                        content = content[:400] + "..."
+                    history_lines.append(f"{speaker}: {content}")
                 history_str = f"Historial reciente de la conversación:\n" + "\n".join(history_lines) + "\n\n"
 
             system_prompt = (

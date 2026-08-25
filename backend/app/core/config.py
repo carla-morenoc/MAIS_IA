@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     postgres_password: str = "MAIS_IA_secret"
     postgres_db: str = "MAIS_IA"
     postgres_host: str = "localhost"
-    postgres_port: int = 5432
+    postgres_port: int = 5433
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -55,7 +55,7 @@ class Settings(BaseSettings):
 
     # ── Redis ──────────────────────────────────────────────
     redis_host: str = "localhost"
-    redis_port: int = 6379
+    redis_port: int = 6380
 
     @computed_field  # type: ignore[prop-decorator]
     @property
