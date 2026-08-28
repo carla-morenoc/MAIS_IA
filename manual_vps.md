@@ -31,6 +31,7 @@ El archivo de entorno está localizado en el VPS en `/home/ubuntu/opt/maisito/ba
 * **`QDRANT_COLLECTION`**: Colección vectorial por defecto en producción (`Maisito_chunks`).
 * **`CORS_ORIGINS`**: Lista en formato JSON de orígenes permitidos:
   `["http://localhost:3000", "http://localhost:8000", "https://maisformacion.com", "https://www.maisformacion.com", "https://formacion.mais.es"]`
+* **`NEXT_PUBLIC_API_URL`**: La URL de acceso público a la API de tu backend FastAPI en producción (por ejemplo: `https://formacion.mais.es/api/v1`). Es un argumento de compilación crucial que el frontend Standalone de Next.js requiere para saber a dónde apuntar las consultas de los usuarios.
 * **`MAIS_IA_SECURITY_TOKEN`**: Clave de comunicación interna segura entre servicios.
 * **`LLM_PROVIDER` / `LLM_MODEL`**: Proveedor del modelo (`groq`, `gemini`, o `deepseek`) y modelo exacto a ejecutar (ej. `openai/gpt-oss-120b`, `gemini-3.6-flash`, o `deepseek-chat`).
   > [!IMPORTANT]
@@ -124,6 +125,7 @@ En la carpeta `/home/ubuntu/opt/maisito/backend/` hay un archivo de texto llamad
 * **LLM_MODEL**: El modelo exacto a usar. Ejemplos recomendados: `gemini-3.6-flash` para Gemini (o el último Flash estable disponible), `openai/gpt-oss-120b` para Groq, y `deepseek-chat` para DeepSeek.
   > [!IMPORTANT]
   > Google AI Studio depreca y apaga sus modelos antiguos muy rápido. Revisa siempre la [documentación de modelos de Google](https://ai.google.dev/gemini-api/docs/models?hl=es-419) antes de configurar este campo.
+* **NEXT_PUBLIC_API_URL**: La dirección de internet pública donde está escuchando el backend de Maisito (ejemplo: `https://formacion.mais.es/api/v1`). Sirve para que la interfaz web del chat sepa a dónde enviar las preguntas de los usuarios. Si cambia el dominio, hay que actualizar este campo antes de volver a compilar en la VPS.
 
 ---
 
