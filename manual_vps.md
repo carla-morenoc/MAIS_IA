@@ -33,7 +33,7 @@ El archivo de entorno está localizado en el VPS en `/home/ubuntu/opt/maisito/ba
   `["http://localhost:3000", "http://localhost:8000", "https://maisformacion.com", "https://www.maisformacion.com", "https://formacion.mais.es"]`
 * **`NEXT_PUBLIC_API_URL`**: La URL de acceso público a la API de tu backend FastAPI en producción (por ejemplo: `https://formacion.mais.es/api/v1`). Es un argumento de compilación crucial que el frontend Standalone de Next.js requiere para saber a dónde apuntar las consultas de los usuarios.
 * **`MAIS_IA_SECURITY_TOKEN`**: Clave de comunicación interna segura entre servicios.
-* **`LLM_PROVIDER` / `LLM_MODEL`**: Proveedor del modelo (`groq`, `gemini`, o `deepseek`) y modelo exacto a ejecutar (ej. `openai/gpt-oss-120b`, `gemini-3.5-flash-lite`, o `deepseek-chat`).
+* **`LLM_PROVIDER` / `LLM_MODEL`**: Proveedor del modelo (`groq`, `gemini`, o `deepseek`) y modelo exacto a ejecutar (ej. `openai/gpt-oss-120b`, `gemini-flash-latest`, o `deepseek-chat`).
   > [!IMPORTANT]
   > Google retira modelos obsoletos con frecuencia. Antes de configurar `LLM_MODEL` para Gemini, consulta la [lista oficial de modelos vigentes en Google AI Studio](https://ai.google.dev/gemini-api/docs/models?hl=es-419) para asegurarte de que el modelo seleccionado sigue activo y no devuelve un error 404.
 * **Claves de API (`GROQ_API_KEY`, `GEMINI_API_KEY`, `DEEPSEEK_API_KEY`)**: Claves de API para los respectivos proveedores. Es completamente compatible y seguro definir múltiples API keys en el archivo al mismo tiempo; el sistema utilizará única y exclusivamente la clave que corresponda al proveedor indicado en `LLM_PROVIDER`, ignorando las demás.
@@ -140,7 +140,7 @@ En la carpeta `/home/ubuntu/opt/maisito/backend/` hay un archivo de texto llamad
 
 * **GEMINI_API_KEY / GROQ_API_KEY / DEEPSEEK_API_KEY**: Las contraseñas o claves del proveedor que le da el cerebro a Maisito. Puedes tener puestas varias claves al mismo tiempo sin problema; el servidor no se confundirá.
 * **LLM_PROVIDER**: Aquí escribes qué IA está activa en ese momento. Pon `groq`, `gemini` o `deepseek`. El servidor solo mirará la clave de la IA que esté escrita aquí y guardará o ignorará las demás de forma segura.
-* **LLM_MODEL**: El modelo exacto a usar. Ejemplos recomendados: `gemini-3.5-flash-lite` para Gemini (el modelo ultrarrápido recomendado), `openai/gpt-oss-120b` para Groq, y `deepseek-chat` para DeepSeek.
+* **LLM_MODEL**: El modelo exacto a usar. Ejemplos recomendados: `gemini-flash-latest` para Gemini (el alias dinámico oficial recomendado por Google para producción que auto-actualiza al modelo Flash más reciente y estable), `openai/gpt-oss-120b` para Groq, y `deepseek-chat` para DeepSeek.
   > [!IMPORTANT]
   > Google AI Studio depreca y apaga sus modelos antiguos muy rápido. Revisa siempre la [documentación de modelos de Google](https://ai.google.dev/gemini-api/docs/models?hl=es-419) antes de configurar este campo.
 * **NEXT_PUBLIC_API_URL**: La dirección de internet pública donde está escuchando el backend de Maisito (ejemplo: `https://formacion.mais.es/api/v1`). Sirve para que la interfaz web del chat sepa a dónde enviar las preguntas de los usuarios. Si cambia el dominio, hay que actualizar este campo antes de volver a compilar en la VPS.
