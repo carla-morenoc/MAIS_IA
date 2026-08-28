@@ -77,6 +77,8 @@ class Settings(BaseSettings):
     llm_model: str = "openai/gpt-oss-120b"
     openai_api_key: str | None = None
     groq_api_key: str | None = None
+    gemini_api_key: str | None = None
+    deepseek_api_key: str | None = None
     ollama_base_url: str = "http://127.0.0.1:11434"
 
     # ── Ingestión de documentos ────────────────────────────

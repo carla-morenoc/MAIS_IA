@@ -26,8 +26,10 @@ class LLMService:
         self.base_url = settings.ollama_base_url
         self.openai_key = settings.openai_api_key
         self.groq_key = settings.groq_api_key
+        self.gemini_key = settings.gemini_api_key
+        self.deepseek_key = settings.deepseek_api_key
 
-        # Validar conectividad con Ollama, OpenAI o Groq, si no hay, caemos en Mock automáticamente
+        # Validar conectividad con los proveedores activos, si no hay credenciales, cae en Mock
         self._detect_best_provider()
 
     def _detect_best_provider(self) -> None:
@@ -38,6 +40,14 @@ class LLMService:
 
         elif self.provider == "groq" and not self.groq_key:
             logger.warning("GROQ_API_KEY no configurada. Activando proveedor 'mock' para desarrollo local.")
+            self.provider = "mock"
+
+        elif self.provider == "gemini" and not self.gemini_key:
+            logger.warning("GEMINI_API_KEY no configurada. Activando proveedor 'mock' para desarrollo local.")
+            self.provider = "mock"
+
+        elif self.provider == "deepseek" and not self.deepseek_key:
+            logger.warning("DEEPSEEK_API_KEY no configurada. Activando proveedor 'mock' para desarrollo local.")
             self.provider = "mock"
         
         elif self.provider == "ollama":
@@ -67,6 +77,10 @@ class LLMService:
             return await self._call_openai(prompt, system_prompt)
         elif self.provider == "groq":
             return await self._call_groq(prompt, system_prompt)
+        elif self.provider == "gemini":
+            return await self._call_gemini(prompt, system_prompt)
+        elif self.provider == "deepseek":
+            return await self._call_deepseek(prompt, system_prompt)
         elif self.provider == "ollama":
             return await self._call_ollama(prompt, system_prompt)
         elif self.provider == "mock":
@@ -191,6 +205,74 @@ class LLMService:
                 return str(content).strip()
             except Exception as exc:
                 logger.error("Error conectando con Groq: %s", exc)
+                raise
+
+    async def _call_gemini(self, prompt: str, system_prompt: str) -> str:
+        """Realiza una llamada asíncrona a la API de Google AI Studio (Gemini)."""
+        gemini_model = self.model
+        if gemini_model in ["gemini", "mock", "openai/gpt-oss-120b", "llama3", "llama-3.1-8b-instant", "deepseek-chat"]:
+            gemini_model = "gemini-1.5-flash"
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent?key={self.gemini_key}"
+        
+        payload = {
+            "contents": [
+                {
+                    "parts": [{"text": prompt}]
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.1
+            }
+        }
+        
+        if system_prompt:
+            payload["systemInstruction"] = {
+                "parts": [{"text": system_prompt}]
+            }
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            try:
+                response = await client.post(url, json=payload)
+                response.raise_for_status()
+                data = response.json()
+                return str(data["candidates"][0]["content"]["parts"][0]["text"]).strip()
+            except Exception as exc:
+                logger.error("Error conectando con Gemini: %s", exc)
+                raise
+
+    async def _call_deepseek(self, prompt: str, system_prompt: str) -> str:
+        """Realiza una llamada asíncrona a la API oficial de DeepSeek (compatible con OpenAI)."""
+        ds_model = self.model
+        if ds_model in ["deepseek", "mock", "openai/gpt-oss-120b", "llama3", "llama-3.1-8b-instant", "gemini-1.5-flash"]:
+            ds_model = "deepseek-chat"
+
+        url = "https://api.deepseek.com/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {self.deepseek_key}",
+            "Content-Type": "application/json",
+        }
+        
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
+        payload = {
+            "model": ds_model,
+            "messages": messages,
+            "temperature": 0.1,
+            "max_tokens": 2048,
+        }
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            try:
+                response = await client.post(url, headers=headers, json=payload)
+                response.raise_for_status()
+                data = response.json()
+                return str(data["choices"][0]["message"]["content"]).strip()
+            except Exception as exc:
+                logger.error("Error conectando con DeepSeek: %s", exc)
                 raise
 
     async def _call_mock(self, prompt: str) -> str:
