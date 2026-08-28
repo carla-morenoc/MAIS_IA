@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { Upload, FileText, CheckCircle2, AlertCircle, Loader2, Trash2, Search, Video, RotateCw, Play } from "lucide-react";
-import { uploadDocument, getDocumentStatus, listDocuments, deleteDocument, DocumentStatusResponse, syncYoutubeVideos, getYoutubeChannelConfig } from "../lib/api";
+import { Upload, FileText, CheckCircle2, AlertCircle, Loader2, Trash2, Search, Video, RotateCw, Play, Eye, EyeOff } from "lucide-react";
+import { uploadDocument, getDocumentStatus, listDocuments, deleteDocument, DocumentStatusResponse, syncYoutubeVideos, getYoutubeChannelConfig, toggleDocument } from "../lib/api";
 
 export interface TrackedDocument {
   id: string;
@@ -12,19 +12,52 @@ export interface TrackedDocument {
   document_type?: string;
   totalChunks: number | null;
   errorMessage: string | null;
+  is_active: boolean;
 }
 
 interface DocumentSidebarProps {
-  onSelectionChange: (docIds: string[], filenames: string[], selectedDocs?: TrackedDocument[]) => void;
-  selectedDocIds: string[];
+  onOpenDocument: (docId: string, filename: string, type: "pdf" | "youtube", filePath?: string) => void;
 }
 
-export default function DocumentSidebar({ onSelectionChange, selectedDocIds }: DocumentSidebarProps) {
+export default function DocumentSidebar({ onOpenDocument }: DocumentSidebarProps) {
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [documents, setDocuments] = useState<TrackedDocument[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [pdfSearchTerm, setPdfSearchTerm] = useState("");
+  const [ytSearchTerm, setYtSearchTerm] = useState("");
+  const [width, setWidth] = useState(400);
+  const isResizing = useRef(false);
+
+  useEffect(() => {
+    const savedWidth = localStorage.getItem("mais_sidebar_width");
+    if (savedWidth) {
+      setWidth(parseInt(savedWidth, 10));
+    }
+  }, []);
+
+  const handleMouseMove = (mouseMoveEvent: MouseEvent) => {
+    if (!isResizing.current) return;
+    const newWidth = mouseMoveEvent.clientX;
+    if (newWidth >= 280 && newWidth <= 650) {
+      setWidth(newWidth);
+      localStorage.setItem("mais_sidebar_width", newWidth.toString());
+    }
+  };
+
+  const handleMouseUp = () => {
+    isResizing.current = false;
+    document.removeEventListener("mousemove", handleMouseMove);
+    document.removeEventListener("mouseup", handleMouseUp);
+  };
+
+  const startResizing = (mouseDownEvent: React.MouseEvent) => {
+    mouseDownEvent.preventDefault();
+    isResizing.current = true;
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  };
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [syncingYt, setSyncingYt] = useState(false);
   const activePollsRef = useRef<{ [key: string]: NodeJS.Timeout }>({});
@@ -74,6 +107,7 @@ export default function DocumentSidebar({ onSelectionChange, selectedDocIds }: D
         document_type: d.document_type || "pdf",
         totalChunks: d.total_chunks,
         errorMessage: d.error_message,
+        is_active: d.is_active,
       }));
       setDocuments(formatted);
       
@@ -106,19 +140,9 @@ export default function DocumentSidebar({ onSelectionChange, selectedDocIds }: D
           document_type: d.document_type || "pdf",
           totalChunks: d.total_chunks,
           errorMessage: d.error_message,
+          is_active: d.is_active,
         }));
         setDocuments(formatted);
-
-        if (selectedDocIds.length === 0) {
-          const completedDocs = formatted.filter((d) => d.status === "COMPLETED");
-          if (completedDocs.length > 0) {
-            onSelectionChange(
-              completedDocs.map((d) => d.id),
-              completedDocs.map((d) => d.filename),
-              completedDocs
-            );
-          }
-        }
         
         formatted.forEach((doc) => {
           if (doc.status === "PENDING" || doc.status === "PROCESSING") {
@@ -154,6 +178,7 @@ export default function DocumentSidebar({ onSelectionChange, selectedDocIds }: D
                   status: data.status,
                   totalChunks: data.total_chunks,
                   errorMessage: data.error_message,
+                  is_active: data.is_active,
                 }
               : doc
           )
@@ -188,94 +213,36 @@ export default function DocumentSidebar({ onSelectionChange, selectedDocIds }: D
       
       const nextDocs = documents.filter((doc) => doc.id !== docId);
       setDocuments(nextDocs);
-      
-      if (selectedDocIds.includes(docId)) {
-        const nextDocIds = selectedDocIds.filter((id) => id !== docId);
-        const nextFilenames = nextDocs
-          .filter((d) => nextDocIds.includes(d.id))
-          .map((d) => d.filename);
-        const nextSelectedDocs = nextDocs.filter((d) => nextDocIds.includes(d.id));
-        onSelectionChange(nextDocIds, nextFilenames, nextSelectedDocs);
-      }
     } catch (err: any) {
       setError(err.message || "Error al eliminar documento.");
     }
   };
 
-  const handleToggleDocument = (docId: string, filename: string) => {
-    let nextDocIds: string[];
-    let nextFilenames: string[];
+  const handleToggleActive = async (docId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const res = await toggleDocument(docId);
+      
+      const nextDocs = documents.map((doc) =>
+        doc.id === docId
+          ? {
+              ...doc,
+              is_active: res.is_active,
+            }
+          : doc
+      );
+      setDocuments(nextDocs);
 
-    if (selectedDocIds.includes(docId)) {
-      nextDocIds = selectedDocIds.filter((id) => id !== docId);
-    } else {
-      nextDocIds = [...selectedDocIds, docId];
+      showToast(
+        res.is_active
+          ? "Documento activado correctamente."
+          : "Documento desactivado. No se usará en futuras búsquedas.",
+        "success"
+      );
+    } catch (err: any) {
+      setError(err.message || "Error al cambiar el estado del documento.");
     }
-
-    nextFilenames = documents
-      .filter((d) => nextDocIds.includes(d.id))
-      .map((d) => d.filename);
-
-    const nextSelectedDocs = documents.filter((d) => nextDocIds.includes(d.id));
-    onSelectionChange(nextDocIds, nextFilenames, nextSelectedDocs);
   };
-
-  const handleSelectAllPdfs = () => {
-    const completedPdfIds = documents
-      .filter((d) => (d.document_type || "pdf") === "pdf" && d.status === "COMPLETED")
-      .map((d) => d.id);
-    
-    // Mantener los vídeos que ya estaban seleccionados
-    const currentVideoIds = selectedDocIds.filter((id) => {
-      const doc = documents.find((d) => d.id === id);
-      return doc && doc.document_type === "youtube";
-    });
-
-    const combinedIds = Array.from(new Set([...currentVideoIds, ...completedPdfIds]));
-    const combinedDocs = documents.filter((d) => combinedIds.includes(d.id));
-    const combinedFilenames = combinedDocs.map((d) => d.filename);
-    onSelectionChange(combinedIds, combinedFilenames, combinedDocs);
-  };
-
-  const handleDeselectAllPdfs = () => {
-    // Mantener únicamente los vídeos seleccionados
-    const currentVideoIds = selectedDocIds.filter((id) => {
-      const doc = documents.find((d) => d.id === id);
-      return doc && doc.document_type === "youtube";
-    });
-    const combinedDocs = documents.filter((d) => currentVideoIds.includes(d.id));
-    const combinedFilenames = combinedDocs.map((d) => d.filename);
-    onSelectionChange(currentVideoIds, combinedFilenames, combinedDocs);
-  };
-
-  const handleSelectAllVideos = () => {
-    const completedVideoIds = documents
-      .filter((d) => d.document_type === "youtube" && d.status === "COMPLETED")
-      .map((d) => d.id);
-    
-    // Mantener los PDFs que ya estaban seleccionados
-    const currentPdfIds = selectedDocIds.filter((id) => {
-      const doc = documents.find((d) => d.id === id);
-      return doc && (doc.document_type || "pdf") === "pdf";
-    });
-
-    const combinedIds = Array.from(new Set([...currentPdfIds, ...completedVideoIds]));
-    const combinedDocs = documents.filter((d) => combinedIds.includes(d.id));
-    const combinedFilenames = combinedDocs.map((d) => d.filename);
-    onSelectionChange(combinedIds, combinedFilenames, combinedDocs);
-  };
-
-  const handleDeselectAllVideos = () => {
-    // Mantener únicamente los PDFs seleccionados
-    const currentPdfIds = selectedDocIds.filter((id) => {
-      const doc = documents.find((d) => d.id === id);
-      return doc && (doc.document_type || "pdf") === "pdf";
-    });
-    const combinedDocs = documents.filter((d) => currentPdfIds.includes(d.id));
-    const combinedFilenames = combinedDocs.map((d) => d.filename);
-    onSelectionChange(currentPdfIds, combinedFilenames, combinedDocs);
-  };
-
 
   const handleUpload = async (file: File) => {
     if (!file.name.toLowerCase().endsWith(".pdf")) {
@@ -294,6 +261,7 @@ export default function DocumentSidebar({ onSelectionChange, selectedDocIds }: D
       document_type: "pdf",
       totalChunks: null,
       errorMessage: null,
+      is_active: true,
     };
     setDocuments((prev) => [tempDoc, ...prev]);
 
@@ -305,15 +273,9 @@ export default function DocumentSidebar({ onSelectionChange, selectedDocIds }: D
           ...d,
           id: res.document_id,
           status: "PENDING",
+          is_active: true,
         } : d)
       );
-      
-      const nextDocIds = [...selectedDocIds, res.document_id];
-      const nextFilenames = [
-        ...documents.filter((d) => selectedDocIds.includes(d.id)).map((d) => d.filename),
-        file.name
-      ];
-      onSelectionChange(nextDocIds, nextFilenames);
       
       startPolling(res.document_id, file.name);
     } catch (err: any) {
@@ -345,7 +307,10 @@ export default function DocumentSidebar({ onSelectionChange, selectedDocIds }: D
   };
 
   return (
-    <aside className="w-80 bg-zinc-950 border-r border-zinc-800 flex flex-col h-full relative">
+    <aside 
+      style={{ width: `${width}px` }} 
+      className="bg-zinc-950 border-r border-zinc-800 flex flex-col h-full relative"
+    >
       {toast && (
         <div className={`absolute bottom-4 left-4 right-4 p-3 rounded-xl text-xs font-medium border shadow-xl z-50 transition-all ${
           toast.type === "success" 
@@ -403,63 +368,30 @@ export default function DocumentSidebar({ onSelectionChange, selectedDocIds }: D
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
-        {(() => {
-          const completedPdfs = documents.filter(d => (d.document_type || "pdf") === "pdf" && d.status === "COMPLETED");
-          const allPdfsSelected = completedPdfs.length > 0 && completedPdfs.every(d => selectedDocIds.includes(d.id));
-          const selectedPdfCount = completedPdfs.filter(d => selectedDocIds.includes(d.id)).length;
-
-          return (
-            <div className="flex items-center justify-between mb-1">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={allPdfsSelected}
-                  disabled={completedPdfs.length === 0}
-                  onChange={() => {
-                    if (allPdfsSelected) {
-                      handleDeselectAllPdfs();
-                    } else {
-                      handleSelectAllPdfs();
-                    }
-                  }}
-                  className="h-3.5 w-3.5 rounded border-zinc-700 text-blue-600 focus:ring-blue-500 bg-zinc-900 cursor-pointer disabled:opacity-40"
-                  title={allPdfsSelected ? "Deseleccionar todos los PDFs" : "Seleccionar todos los PDFs"}
-                />
-                <h3 className="text-xs font-bold text-zinc-400 hover:text-zinc-200 uppercase tracking-widest transition-colors">
-                  Documentos Activos
-                </h3>
-              </label>
-              <span className="text-[10px] text-zinc-500 font-mono">
-                {selectedPdfCount}/{completedPdfs.length}
-              </span>
-            </div>
-          );
-        })()}
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">
+            Documentos Activos
+          </h3>
+          <span className="text-[10px] text-zinc-500 font-mono">
+            {documents.filter(d => (d.document_type || "pdf") === "pdf" && d.status === "COMPLETED").length} manuales
+          </span>
+        </div>
 
         <div className="relative">
           <input
             type="text"
             placeholder="Buscar PDF por nombre..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-zinc-900/50 hover:bg-zinc-900/80 focus:bg-zinc-900/90 border border-zinc-800 text-zinc-200 text-xs rounded-xl pl-9 pr-4 py-2.5 outline-none focus:border-blue-500/80 transition-all placeholder-zinc-500"
+            value={pdfSearchTerm}
+            onChange={(e) => setPdfSearchTerm(e.target.value)}
+            className="w-full bg-zinc-900/50 hover:bg-zinc-900/80 focus:bg-zinc-900/90 border border-zinc-800 text-zinc-200 text-sm rounded-xl pl-10 pr-4 py-3 outline-none focus:border-blue-500/80 transition-all placeholder-zinc-500"
           />
-          <Search className="absolute left-3 top-3 h-3.5 w-3.5 text-zinc-500" />
+          <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-zinc-500" />
         </div>
-
-        {selectedDocIds.length > 0 && (
-          <button
-            onClick={() => onSelectionChange([], [])}
-            className="w-full text-center p-2 rounded-xl text-[10px] text-blue-400 hover:text-blue-300 hover:bg-blue-950/20 border border-blue-900/30 transition-all font-semibold uppercase tracking-wider cursor-pointer"
-          >
-            Limpiar selección ({selectedDocIds.length} seleccionados)
-          </button>
-        )}
         
         {(() => {
           const pdfDocs = documents.filter(d => (d.document_type || "pdf") === "pdf");
           const filteredDocs = pdfDocs.filter((doc) =>
-            doc.filename.toLowerCase().includes(searchTerm.toLowerCase())
+            doc.filename.toLowerCase().includes(pdfSearchTerm.toLowerCase())
           );
 
           return (
@@ -470,58 +402,58 @@ export default function DocumentSidebar({ onSelectionChange, selectedDocIds }: D
                 </p>
               ) : (
                 filteredDocs.map((doc) => {
-                  const isSelected = selectedDocIds.includes(doc.id);
                   return (
                     <div
                       key={doc.id}
-                      onClick={() => doc.status === "COMPLETED" && handleToggleDocument(doc.id, doc.filename)}
-                      className={`p-3 rounded-xl border transition-all duration-300 relative group ${
-                        doc.status === "COMPLETED" ? "cursor-pointer" : "opacity-60 cursor-not-allowed"
-                      } ${
-                        isSelected
-                          ? "border-blue-500/50 bg-blue-950/10 shadow-lg shadow-blue-950/10"
-                          : "border-zinc-900 hover:border-zinc-800 bg-zinc-900/20 hover:bg-zinc-900/40"
+                      onClick={() => doc.status === "COMPLETED" && doc.is_active && onOpenDocument(doc.id, doc.filename, "pdf")}
+                      className={`p-4 rounded-xl border transition-all duration-300 relative group ${
+                        doc.status === "COMPLETED" && doc.is_active 
+                          ? "cursor-pointer border-zinc-900 hover:border-blue-500/50 hover:bg-blue-950/10 hover:shadow-lg hover:shadow-blue-950/10" 
+                          : doc.status === "COMPLETED" 
+                            ? "cursor-pointer opacity-70 border-zinc-900 hover:border-zinc-800 bg-zinc-900/20" 
+                            : "opacity-60 cursor-not-allowed border-zinc-900 bg-zinc-900/10"
                       }`}
                     >
+                      {doc.status === "COMPLETED" && (
+                        <button
+                          onClick={(e) => handleToggleActive(doc.id, e)}
+                          className={`absolute top-4 right-10 text-zinc-500 hover:text-blue-400 transition-all duration-200 z-10 cursor-pointer ${
+                            !doc.is_active ? "opacity-100 text-amber-500" : "opacity-0 group-hover:opacity-100"
+                          }`}
+                          title={doc.is_active ? "Desactivar documento (no se usará en chat)" : "Activar documento (se usará en chat)"}
+                        >
+                          {doc.is_active ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                        </button>
+                      )}
+
                       <button
                         onClick={(e) => handleDelete(doc.id, e)}
-                        className="absolute top-3 right-3 text-zinc-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 cursor-pointer"
+                        className="absolute top-4 right-4 text-zinc-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 cursor-pointer"
                         title="Eliminar documento"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
 
                       <div className="flex items-start gap-3">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          disabled={doc.status !== "COMPLETED"}
-                          onChange={(e) => {
-                            e.stopPropagation();
-                            if (doc.status === "COMPLETED") {
-                              handleToggleDocument(doc.id, doc.filename);
-                            }
-                          }}
-                          className="mt-1 h-3.5 w-3.5 rounded border-zinc-700 text-blue-600 focus:ring-blue-500 bg-zinc-900 shrink-0 cursor-pointer disabled:opacity-40"
-                        />
-                        
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
-                            <FileText className={`h-4 w-4 shrink-0 ${isSelected ? "text-blue-400" : "text-zinc-500"}`} />
-                            <p className="text-sm font-medium text-zinc-200 truncate pr-6">{doc.filename}</p>
+                            <FileText className="h-4 w-4 shrink-0 text-zinc-500" />
+                            <p className={`text-sm font-medium truncate pr-16 ${
+                              !doc.is_active ? "text-zinc-500 line-through italic" : "text-zinc-200"
+                            }`}>{doc.filename}</p>
                           </div>
                           
-                          <div className="flex items-center gap-1.5 mt-1.5 pl-5">
+                          <div className="flex items-center gap-1.5 mt-1.5 pl-5.5">
                             {doc.status === "COMPLETED" && (
                               <>
-                                <CheckCircle2 className="h-3 w-3 text-green-500" />
-                                <span className="text-xs text-zinc-500">{doc.totalChunks} chunks</span>
+                                <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                                <span className="text-xs text-zinc-500">{doc.totalChunks} chunks {!doc.is_active && "(Inactivo)"}</span>
                               </>
                             )}
                             {doc.status === "FAILED" && (
                               <div className="mt-1">
                                 <div className="flex items-center gap-1.5">
-                                  <AlertCircle className="h-3 w-3 text-red-500 shrink-0" />
+                                  <AlertCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
                                   <span className="text-xs font-bold text-red-500">Error</span>
                                 </div>
                               </div>
@@ -547,35 +479,17 @@ export default function DocumentSidebar({ onSelectionChange, selectedDocIds }: D
           <div className="flex flex-col gap-3">
             {(() => {
               const completedVideos = documents.filter(d => d.document_type === "youtube" && d.status === "COMPLETED");
-              const allVideosSelected = completedVideos.length > 0 && completedVideos.every(d => selectedDocIds.includes(d.id));
-              const selectedVideoCount = completedVideos.filter(d => selectedDocIds.includes(d.id)).length;
 
               return (
                 <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-2 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={allVideosSelected}
-                      disabled={completedVideos.length === 0}
-                      onChange={() => {
-                        if (allVideosSelected) {
-                          handleDeselectAllVideos();
-                        } else {
-                          handleSelectAllVideos();
-                        }
-                      }}
-                      className="h-3.5 w-3.5 rounded border-zinc-700 text-red-600 focus:ring-red-500 bg-zinc-900 cursor-pointer disabled:opacity-40"
-                      title={allVideosSelected ? "Deseleccionar todos los vídeos" : "Seleccionar todos los vídeos"}
-                    />
-                    <h3 className="text-xs font-bold text-zinc-400 hover:text-zinc-200 uppercase tracking-widest flex items-center gap-1.5 transition-colors">
-                      <Video className="h-4 w-4 text-red-500 shrink-0" />
-                      Videotutoriales
-                    </h3>
-                  </label>
+                  <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Video className="h-4 w-4 text-red-500 shrink-0" />
+                    Videotutoriales
+                  </h3>
 
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] text-zinc-500 font-mono">
-                      {selectedVideoCount}/{completedVideos.length}
+                      {completedVideos.length} vídeos
                     </span>
                     <button
                       onClick={handleSyncYoutube}
@@ -600,13 +514,24 @@ export default function DocumentSidebar({ onSelectionChange, selectedDocIds }: D
               value={channelUrl}
               onChange={(e) => handleChannelUrlChange(e.target.value)}
               placeholder="Enlace o ID del canal de YouTube..."
-              className="w-full bg-zinc-900/50 hover:bg-zinc-900/80 focus:bg-zinc-900/90 border border-zinc-800 text-zinc-200 text-xs rounded-xl px-3 py-2 outline-none focus:border-red-500/80 transition-all placeholder-zinc-600"
+              className="w-full bg-zinc-900/50 hover:bg-zinc-900/80 focus:bg-zinc-900/90 border border-zinc-800 text-zinc-200 text-sm rounded-xl px-4 py-3 outline-none focus:border-red-500/80 transition-all placeholder-zinc-600"
             />
+          </div>
+
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Buscar vídeo por nombre..."
+              value={ytSearchTerm}
+              onChange={(e) => setYtSearchTerm(e.target.value)}
+              className="w-full bg-zinc-900/50 hover:bg-zinc-900/80 focus:bg-zinc-900/90 border border-zinc-800 text-zinc-200 text-sm rounded-xl pl-10 pr-4 py-3 outline-none focus:border-red-500/80 transition-all placeholder-zinc-500"
+            />
+            <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-zinc-500" />
           </div>
 
           {(() => {
             const ytDocs = documents.filter(d => d.document_type === "youtube");
-            const filteredYt = ytDocs.filter(d => d.filename.toLowerCase().includes(searchTerm.toLowerCase()));
+            const filteredYt = ytDocs.filter(d => d.filename.toLowerCase().includes(ytSearchTerm.toLowerCase()));
 
             return (
               <div className="space-y-2">
@@ -616,52 +541,52 @@ export default function DocumentSidebar({ onSelectionChange, selectedDocIds }: D
                   </div>
                 ) : (
                   filteredYt.map((doc) => {
-                    const isSelected = selectedDocIds.includes(doc.id);
                     return (
                       <div
                         key={doc.id}
-                        onClick={() => doc.status === "COMPLETED" && handleToggleDocument(doc.id, doc.filename)}
-                        className={`p-3 rounded-xl border transition-all duration-300 relative group ${
-                          doc.status === "COMPLETED" ? "cursor-pointer" : "opacity-60 cursor-not-allowed"
-                        } ${
-                          isSelected
-                            ? "border-red-500/50 bg-red-950/10 shadow-lg shadow-red-950/10"
-                            : "border-zinc-900 hover:border-zinc-800 bg-zinc-900/20 hover:bg-zinc-900/40"
+                        onClick={() => doc.status === "COMPLETED" && doc.is_active && onOpenDocument(doc.id, doc.filename, "youtube", doc.file_path)}
+                        className={`p-4 rounded-xl border transition-all duration-300 relative group ${
+                          doc.status === "COMPLETED" && doc.is_active 
+                            ? "cursor-pointer border-zinc-900 hover:border-red-500/50 hover:bg-red-950/10 hover:shadow-lg hover:shadow-red-950/10" 
+                            : doc.status === "COMPLETED" 
+                              ? "cursor-pointer opacity-70 border-zinc-900 hover:border-zinc-800 bg-zinc-900/20" 
+                              : "opacity-60 cursor-not-allowed border-zinc-900 bg-zinc-900/10"
                         }`}
                       >
+                        {doc.status === "COMPLETED" && (
+                          <button
+                            onClick={(e) => handleToggleActive(doc.id, e)}
+                            className={`absolute top-4 right-10 text-zinc-500 hover:text-red-400 transition-all duration-200 z-10 cursor-pointer ${
+                              !doc.is_active ? "opacity-100 text-amber-500" : "opacity-0 group-hover:opacity-100"
+                            }`}
+                            title={doc.is_active ? "Desactivar videotutorial (no se usará en chat)" : "Activar videotutorial (se usará en chat)"}
+                          >
+                            {doc.is_active ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                          </button>
+                        )}
+
                         <button
                           onClick={(e) => handleDelete(doc.id, e)}
-                          className="absolute top-3 right-3 text-zinc-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 cursor-pointer"
+                          className="absolute top-4 right-4 text-zinc-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 cursor-pointer"
                           title="Eliminar videotutorial"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
 
                         <div className="flex items-start gap-3">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            disabled={doc.status !== "COMPLETED"}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              if (doc.status === "COMPLETED") {
-                                handleToggleDocument(doc.id, doc.filename);
-                              }
-                            }}
-                            className="mt-1 h-3.5 w-3.5 rounded border-zinc-700 text-red-600 focus:ring-red-500 bg-zinc-900 shrink-0 cursor-pointer disabled:opacity-40"
-                          />
-                          
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">
-                              <Play className={`h-3.5 w-3.5 shrink-0 ${isSelected ? "text-red-400" : "text-zinc-500"}`} />
-                              <p className="text-xs font-semibold text-zinc-200 truncate pr-6">{doc.filename}</p>
+                              <Play className="h-4 w-4 shrink-0 text-zinc-500" />
+                              <p className={`text-sm font-semibold truncate pr-16 ${
+                                !doc.is_active ? "text-zinc-500 line-through italic" : "text-zinc-200"
+                              }`}>{doc.filename}</p>
                             </div>
                             
-                            <div className="flex items-center gap-1.5 mt-1.5 pl-5">
+                            <div className="flex items-center gap-1.5 mt-1.5 pl-5.5">
                               {doc.status === "COMPLETED" && (
                                 <>
-                                  <CheckCircle2 className="h-3 w-3 text-green-500 animate-pulse" />
-                                  <span className="text-[10px] text-zinc-500 font-medium">{doc.totalChunks} chunks</span>
+                                  <CheckCircle2 className="h-3.5 w-3.5 text-green-500 animate-pulse" />
+                                  <span className="text-xs text-zinc-500 font-medium">{doc.totalChunks} chunks {!doc.is_active && "(Inactivo)"}</span>
                                 </>
                               )}
                               {doc.status === "FAILED" && (
@@ -686,6 +611,12 @@ export default function DocumentSidebar({ onSelectionChange, selectedDocIds }: D
         </div>
 
       </div>
+
+      {/* Barra de arrastre para redimensionar (resizer handle) */}
+      <div
+        onMouseDown={startResizing}
+        className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-zinc-700/80 active:bg-blue-500 transition-colors z-30"
+      />
     </aside>
   );
 }

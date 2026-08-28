@@ -15,7 +15,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, UploadFile, status
+from fastapi import APIRouter, HTTPException, Request, UploadFile, status
 from fastapi.params import Depends
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -25,6 +25,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.db.models import Document, DocumentStatus
 from app.db.postgres import get_db_session
+from app.app_security.file_validator import sanitize_filename, validate_pdf_magic_bytes
+from app.app_security.rate_limit import limiter
 from app.workers.ingestion import process_pdf_task
 
 logger = logging.getLogger(__name__)
@@ -47,6 +49,7 @@ class DocumentItem(BaseModel):
     error_message: str | None
     created_at: datetime
     updated_at: datetime
+    is_active: bool = True
 
 
 
@@ -73,12 +76,19 @@ class DocumentStatusResponse(BaseModel):
     error_message: str | None
     created_at: datetime
     updated_at: datetime
+    is_active: bool = True
+
+
+class ToggleDocumentResponse(BaseModel):
+    """Respuesta tras activar/desactivar un documento."""
+
+    document_id: str
+    is_active: bool
 
 
 # ── Constantes ─────────────────────────────────────────────
 
 ALLOWED_EXTENSIONS = {".pdf"}
-MAX_FILE_SIZE_MB = 50
 
 
 # ── Endpoints ──────────────────────────────────────────────
@@ -95,7 +105,9 @@ MAX_FILE_SIZE_MB = 50
         "procesarlo (parsing, chunking, embeddings, Qdrant)."
     ),
 )
+@limiter.limit("20/minute")
 async def upload_document(
+    request: Request,
     file: UploadFile,
     session: AsyncSession = Depends(get_db_session),
 ) -> DocumentUploadResponse:
@@ -103,7 +115,7 @@ async def upload_document(
     Sube un documento PDF para procesamiento asíncrono.
     Devuelve inmediatamente el document_id para consultar el estado después.
     """
-    # ── Validar extensión ──────────────────────────────────
+    # ── Validar nombre ──────────────────────────────────────
     if file.filename is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -117,26 +129,24 @@ async def upload_document(
             detail=f"Solo se aceptan archivos PDF. Extensión recibida: '{file_ext}'",
         )
 
-    # ── Validar tamaño (leer contenido) ────────────────────
+    # ── Leer contenido y validar magic bytes ───────────────
+    # La validación de tamaño se omite deliberadamente: la gestión de
+    # archivos grandes es responsabilidad del equipo operacional.
     content = await file.read()
-    file_size_mb = len(content) / (1024 * 1024)
-    if file_size_mb > MAX_FILE_SIZE_MB:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"Archivo demasiado grande: {file_size_mb:.1f}MB (máx: {MAX_FILE_SIZE_MB}MB)",
-        )
+    validate_pdf_magic_bytes(content)
 
     # ── Guardar archivo en disco ───────────────────────────
     upload_dir = Path(settings.upload_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)
 
-    # Nombre único para evitar colisiones
+    # Nombre único y sanitizado en disco (previene Path Traversal).
+    # El nombre original se preserva en la base de datos para mostrarlo al usuario.
     file_id = uuid.uuid4()
-    safe_filename = f"{file_id}_{file.filename}"
+    safe_filename = f"{file_id}_{sanitize_filename(file.filename)}"
     file_path = upload_dir / safe_filename
 
     file_path.write_bytes(content)
-    logger.info("Archivo guardado: %s (%0.1f MB)", file_path, file_size_mb)
+    logger.info("Archivo guardado: %s (%0.1f MB)", file_path, len(content) / (1024 * 1024))
 
     # ── Crear registro en PostgreSQL ───────────────────────
     document = Document(
@@ -207,6 +217,7 @@ async def get_document_status(
         error_message=document.error_message,
         created_at=document.created_at,
         updated_at=document.updated_at,
+        is_active=document.is_active,
     )
 
 
@@ -235,6 +246,7 @@ async def list_documents(
             "error_message": d.error_message,
             "created_at": d.created_at,
             "updated_at": d.updated_at,
+            "is_active": d.is_active,
         }
         for d in docs
     ]
@@ -353,6 +365,46 @@ async def delete_document(
     }
 
 
+@router.patch(
+    "/{document_id}/toggle",
+    response_model=ToggleDocumentResponse,
+    summary="Activar o desactivar un documento",
+    description="Permite activar o desactivar un documento (PDF o vídeo) para que se use o se ignore en las búsquedas.",
+)
+async def toggle_document(
+    document_id: str,
+    session: AsyncSession = Depends(get_db_session),
+) -> ToggleDocumentResponse:
+    """Cambia el estado de activación de un documento por su ID."""
+    try:
+        doc_uuid = uuid.UUID(document_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"ID de documento inválido: '{document_id}'",
+        )
+
+    result = await session.execute(
+        select(Document).where(Document.id == doc_uuid)
+    )
+    document = result.scalar_one_or_none()
+
+    if document is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Documento no encontrado: '{document_id}'",
+        )
+
+    document.is_active = not document.is_active
+    # get_db_session hará el commit automáticamente al finalizar
+    logger.info("Documento %s cambiado de estado de activacion a %s", document_id, document.is_active)
+    
+    return ToggleDocumentResponse(
+        document_id=str(document.id),
+        is_active=document.is_active,
+    )
+
+
 @router.get(
     "/youtube-channel",
     summary="Obtener ID y URL del canal de YouTube configurado por defecto",
@@ -385,7 +437,9 @@ async def get_youtube_video_title(video_url: str) -> str:
     summary="Sincronizar dinámicamente videotutoriales de YouTube",
     description="Consulta el canal de YouTube o procesa un vídeo individual directo e inicia su indexación."
 )
+@limiter.limit("5/minute")
 async def sync_youtube_videos(
+    request: Request,
     payload: SyncYoutubeRequest | None = None,
     session: AsyncSession = Depends(get_db_session),
 ):

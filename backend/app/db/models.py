@@ -79,6 +79,12 @@ class Document(Base):
         index=True,
         comment="Estado actual del procesamiento",
     )
+    is_active: Mapped[bool] = mapped_column(
+        nullable=False,
+        default=True,
+        server_default="true",
+        comment="Indica si el documento está activo y debe usarse en las búsquedas",
+    )
     total_chunks: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,

@@ -25,6 +25,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from app.core.config import get_settings
 from app.db.models import Document, DocumentStatus
 from app.db.postgres import sync_session_factory
+from app.app_security.prompt_guard import sanitize_text_for_indexing
 from app.services.vector_store import (
     ChunkData,
     generate_dense_embeddings,
@@ -196,9 +197,11 @@ def process_pdf_task(self, document_id: str) -> dict[str, str | int]:  # noqa: A
             for page_num, page_text in pages_text:
                 page_chunks = splitter.split_text(page_text)
                 for chunk_text in page_chunks:
+                    # Sanitizar PII antes de indexar en Qdrant
+                    safe_text = sanitize_text_for_indexing(chunk_text)
                     chunks.append(
                         ChunkData(
-                            text=chunk_text,
+                            text=safe_text,
                             doc_id=document_id,
                             filename=document.filename,
                             page_number=page_num,

@@ -18,6 +18,10 @@ from app.services.vector_store import (
     generate_sparse_embeddings,
 )
 
+from sqlalchemy import select
+from app.db.postgres import async_session_factory
+from app.db.models import Document
+
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
@@ -62,15 +66,40 @@ async def hybrid_search(
     )
 
     # ── 2. Configurar filtros opcionales ───────────────────
-    filter_cond = None
+    # Obtener documentos inactivos para excluirlos de la búsqueda
+    inactive_ids = []
+    try:
+        async with async_session_factory() as db_session:
+            stmt = select(Document.id).where(Document.is_active == False)
+            res = await db_session.execute(stmt)
+            inactive_ids = [str(r[0]) for r in res.all()]
+    except Exception as exc:
+        logger.error("Error al obtener documentos inactivos de la base de datos: %s", exc)
+
+    must_conditions = []
+    must_not_conditions = []
+
     if document_ids:
+        must_conditions.append(
+            models.FieldCondition(
+                key="doc_id",
+                match=models.MatchAny(any=document_ids)
+            )
+        )
+
+    if inactive_ids:
+        must_not_conditions.append(
+            models.FieldCondition(
+                key="doc_id",
+                match=models.MatchAny(any=inactive_ids)
+            )
+        )
+
+    filter_cond = None
+    if must_conditions or must_not_conditions:
         filter_cond = models.Filter(
-            must=[
-                models.FieldCondition(
-                    key="doc_id",
-                    match=models.MatchAny(any=document_ids)
-                )
-            ]
+            must=must_conditions if must_conditions else None,
+            must_not=must_not_conditions if must_not_conditions else None
         )
 
     # ── 3. Ejecutar consulta híbrida con fusión RRF ────────

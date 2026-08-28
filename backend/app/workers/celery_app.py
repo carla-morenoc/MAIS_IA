@@ -4,6 +4,12 @@ MAIS_IA — Configuración de la instancia Celery.
 Define la aplicación Celery conectada a Redis como broker y backend.
 Los workers se lanzan con:
     celery -A app.workers.celery_app worker --loglevel=info --pool=solo
+
+Seguridad aplicada:
+- Serialización exclusivamente JSON (pickle deshabilitado → sin RCE)
+- task_reject_on_worker_lost: evita pérdida silenciosa de tareas si el worker muere
+- worker_max_tasks_per_child: recicla el proceso worker tras N tareas para evitar
+  memory leaks en ingestiones largas de PDFs
 """
 
 from celery import Celery
@@ -21,17 +27,23 @@ celery_app = Celery(
 
 # Configuración del comportamiento de las tareas
 celery_app.conf.update(
-    # Serialización JSON para compatibilidad y seguridad
+    # ── Serialización segura (pickle completamente deshabilitado) ──────────
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",
-    # Timezone
+    # ── Timezone ──────────────────────────────────────────────────────────
     timezone="UTC",
     enable_utc=True,
-    # Reintentos: las tareas de ingestión no se reintentan automáticamente
-    # (el retry se gestiona manualmente desde el endpoint)
+    # ── Fiabilidad de tareas ───────────────────────────────────────────────
+    # Confirma el ACK de Redis solo después de que la tarea termina con éxito.
+    # Evita pérdida silenciosa de mensajes si el worker muere a mitad de tarea.
     task_acks_late=True,
+    task_reject_on_worker_lost=True,
+    # Un worker procesa una tarea a la vez (evita saturación de CPU/VRAM)
     worker_prefetch_multiplier=1,
+    # Reciclar el proceso worker tras 200 tareas para liberar memoria acumulada
+    # (útil en ingestiones largas con modelos de embeddings cargados en RAM)
+    worker_max_tasks_per_child=200,
 )
 
 # Registrar explícitamente los módulos que contienen tareas

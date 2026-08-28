@@ -4,10 +4,13 @@ MAIS_IA — Configuración centralizada del backend.
 Usa pydantic-settings para cargar variables de entorno desde .env
 con validación automática de tipos y valores por defecto seguros.
 Patrón Singleton via lru_cache para evitar re-parsear en cada request.
+
+Campos de seguridad añadidos:
+- redis_password: si se define, se incluye en la URL de Redis
+- qdrant_api_key: si se define, se pasa al cliente Qdrant como api_key
 """
 
 from functools import lru_cache
-from typing import Annotated
 
 from pydantic import computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -52,15 +55,23 @@ class Settings(BaseSettings):
     qdrant_host: str = "localhost"
     qdrant_port: int = 6333
     qdrant_grpc_port: int = 6334
+    # Si se define, se pasa como api_key al cliente Qdrant.
+    # Dejar vacío para entornos locales sin autenticación.
+    qdrant_api_key: str | None = None
 
     # ── Redis ──────────────────────────────────────────────
     redis_host: str = "localhost"
     redis_port: int = 6380
+    # Si se define, se incluye en la URL de Redis (requirepass).
+    # Dejar vacío para entornos locales sin contraseña.
+    redis_password: str | None = None
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def redis_url(self) -> str:
         """URL de conexión para Redis (broker Celery y caché)."""
+        if self.redis_password:
+            return f"redis://:{self.redis_password}@{self.redis_host}:{self.redis_port}/0"
         return f"redis://{self.redis_host}:{self.redis_port}/0"
 
     # ── Embeddings ─────────────────────────────────────────
