@@ -124,6 +124,19 @@ sudo docker compose -f docker-compose.prod.yml down
      ```
      *(Luego, reinicia el backend para que refresque la sesión: `sudo docker compose -f docker-compose.prod.yml restart backend`)*
 
+### Error F: Falso error de CORS en el navegador al enviar preguntas (`No 'Access-Control-Allow-Origin' header`)
+* **Causa real:** El navegador reporta un fallo de políticas CORS, pero la causa real es que el backend de FastAPI en la VPS se ha cerrado o fallado durante el arranque (por ejemplo, contraseña de Postgres incorrecta o cuota/modelo de LLM inválido), haciendo que Nginx responda con un error HTTP `502 Bad Gateway` sin cabeceras CORS.
+* **Solución:**
+  1. Ignora el mensaje del navegador y comprueba el log de error real del backend ejecutando en la VPS:
+     ```bash
+     sudo docker compose -f docker-compose.prod.yml logs --tail=30 backend
+     ```
+  2. Corrige el fallo indicado en la traza (ejemplo: ajustar `POSTGRES_PASSWORD` o `LLM_MODEL` en `.env`).
+  3. Recrea los contenedores cargando las variables del `.env` corregido:
+     ```bash
+     sudo docker compose -f docker-compose.prod.yml up -d
+     ```
+
 ---
 ---
 
