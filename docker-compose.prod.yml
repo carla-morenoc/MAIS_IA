@@ -22,6 +22,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-MAIS_IA} -d ${POSTGRES_DB:-MAIS_IA}"]
       interval: 10s
@@ -96,6 +98,8 @@ services:
     volumes:
       # Carpeta de uploads física compartida
       - ./backend/uploads:/app/uploads
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -133,6 +137,8 @@ services:
     volumes:
       # Carpeta de uploads física compartida
       - ./backend/uploads:/app/uploads
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -167,6 +173,9 @@ services:
       - QDRANT_PORT=6333
       - API_DEBUG=false
       - TZ=Europe/Madrid
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     depends_on:
       redis:
         condition: service_healthy
