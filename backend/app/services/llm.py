@@ -211,7 +211,7 @@ class LLMService:
         """Realiza una llamada asíncrona a la API de Google AI Studio (Gemini)."""
         gemini_model = self.model
         if gemini_model in ["gemini", "mock", "openai/gpt-oss-120b", "llama3", "llama-3.1-8b-instant", "deepseek-chat"]:
-            gemini_model = "gemini-flash-latest"
+            gemini_model = "gemini-3.5-flash-lite"
 
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent?key={self.gemini_key}"
         

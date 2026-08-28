@@ -47,7 +47,7 @@ Copia la carpeta entera `MAIS_IA` al disco local del nuevo ordenador (se recomie
 > 
 > # Configuración del LLM activo
 > LLM_PROVIDER=gemini # Opciones: groq, gemini, deepseek
-> LLM_MODEL=gemini-flash-latest # Ejemplos: openai/gpt-oss-120b (Groq), gemini-flash-latest (Gemini), deepseek-chat (DeepSeek)
+> LLM_MODEL=gemini-3.5-flash-lite # Ejemplos: openai/gpt-oss-120b (Groq), gemini-3.5-flash-lite (Gemini), deepseek-chat (DeepSeek)
 > 
 > # NOTA DE SEGURIDAD: Google retira modelos antiguos periódicamente. 
 > # Antes de configurar LLM_MODEL para Gemini, comprueba la lista oficial de modelos vigentes en:
