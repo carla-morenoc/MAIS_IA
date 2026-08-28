@@ -106,6 +106,19 @@ sudo docker compose -f docker-compose.prod.yml down
   sudo docker compose -f docker-compose.prod.yml restart backend celery_worker
   ```
 
+### Error E: Desfase horario en chats o registros (Horas de retraso)
+* **Causa:** La base de datos o el backend están configurados en la zona horaria UTC (desfase de 1 o 2 horas con respecto a España).
+* **Solución permanente:**
+  1. La infraestructura en `docker-compose.prod.yml` monta automáticamente `/etc/localtime` y `/etc/timezone` del host como volumen de sólo lectura.
+  2. Asegúrate de que el servidor VPS tiene configurada la hora de España ejecutando en la consola de Linux:
+     ```bash
+     sudo timedatectl set-timezone Europe/Madrid
+     ```
+  3. Si la hora del sistema de la VPS cambia, reinicia los contenedores para aplicar:
+     ```bash
+     sudo docker compose -f docker-compose.prod.yml restart postgres backend celery_worker
+     ```
+
 ---
 ---
 
@@ -304,4 +317,3 @@ Si nadie puede entrar al panel aunque la contraseña sea la correcta, prueba est
 ```bash
 sudo systemctl reload nginx
 ```
-
