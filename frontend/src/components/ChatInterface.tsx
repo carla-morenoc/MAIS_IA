@@ -49,6 +49,14 @@ export default function ChatInterface({
   const [faqs, setFaqs] = useState<FAQItem[]>([]);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  const isSendingRef = useRef(false);
+  const sessionIdRef = useRef(sessionId);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
+
   // Inicializar sessionId y recuperar historial persistente de PostgreSQL
   useEffect(() => {
     let sid = "";
@@ -92,6 +100,15 @@ export default function ChatInterface({
   }, [messages, loading]);
 
   const handleNewConversation = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+
+    isSendingRef.current = false;
+    setLoading(false);
+    setError(null);
+
     const newSid = (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : `sess_${Date.now()}`;
     if (typeof window !== "undefined") {
       localStorage.setItem("maisia_session_id", newSid);
@@ -109,8 +126,11 @@ export default function ChatInterface({
   const handleSend = async (e?: React.FormEvent, customQuery?: string) => {
     if (e) e.preventDefault();
     const queryToSend = customQuery ? customQuery.trim() : input.trim();
-    if (!queryToSend || loading) return;
+    if (!queryToSend || loading || isSendingRef.current) return;
 
+    const currentSessionId = sessionId;
+
+    isSendingRef.current = true;
     setInput("");
     setError(null);
 
@@ -128,19 +148,34 @@ export default function ChatInterface({
         text: "⚠️ No hay ningún documento ni vídeo seleccionado. Por favor, marca al menos una casilla en el panel izquierdo para consultar.",
       };
       setMessages((prev) => [...prev, warnMsg]);
+      isSendingRef.current = false;
       return;
     }
 
     setLoading(true);
 
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
-      const res = await queryChat(queryToSend, selectedDocIds, sessionId);
+      const res = await queryChat(queryToSend, selectedDocIds, currentSessionId, controller.signal);
       
-      if (res.session_id && res.session_id !== sessionId) {
+      if (sessionIdRef.current !== currentSessionId) {
+        return;
+      }
+
+      if (res.session_id && res.session_id !== currentSessionId) {
         setSessionId(res.session_id);
         if (typeof window !== "undefined") {
           localStorage.setItem("maisia_session_id", res.session_id);
         }
+      }
+
+      if (res.answer.includes("Error interno en la generación") || res.answer.includes("Error interno en")) {
+        throw new Error("Lo siento, no puedo conectar con el servidor en este momento. Por favor, contacta con el servicio técnico de MAIS.");
       }
 
       const botMsg: Message = {
@@ -154,9 +189,18 @@ export default function ChatInterface({
 
       setMessages((prev) => [...prev, botMsg]);
     } catch (err: any) {
-      setError(err.message || "Fallo al procesar la respuesta.");
+      if (err.name === "AbortError") {
+        return;
+      }
+      if (sessionIdRef.current === currentSessionId) {
+        setError(err.message || "Fallo al procesar la respuesta.");
+      }
     } finally {
-      setLoading(false);
+      if (sessionIdRef.current === currentSessionId) {
+        isSendingRef.current = false;
+        setLoading(false);
+        abortControllerRef.current = null;
+      }
     }
   };
 
@@ -670,7 +714,8 @@ export default function ChatInterface({
                 <button
                   key={fIdx}
                   onClick={() => handleSend(undefined, faq.text)}
-                  className="bg-zinc-900/60 border border-zinc-800/80 hover:bg-zinc-850 hover:border-blue-500/50 text-zinc-300 hover:text-zinc-100 rounded-xl p-4 transition-all duration-200 cursor-pointer shadow-sm text-left flex flex-col gap-1 group active:scale-[0.98] outline-none"
+                  disabled={loading}
+                  className="bg-zinc-900/60 border border-zinc-800/80 hover:bg-zinc-850 hover:border-blue-500/50 disabled:hover:bg-zinc-900/60 disabled:hover:border-zinc-800/80 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none text-zinc-300 hover:text-zinc-100 rounded-xl p-4 transition-all duration-200 cursor-pointer shadow-sm text-left flex flex-col gap-1 group active:scale-[0.98] outline-none"
                 >
                   <span className="font-semibold text-xs text-blue-400 group-hover:text-blue-300 flex items-center gap-1.5">
                     <Sparkles className="h-3.5 w-3.5 text-blue-500 group-hover:animate-pulse" />

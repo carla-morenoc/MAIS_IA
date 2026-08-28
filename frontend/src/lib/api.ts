@@ -103,7 +103,8 @@ export async function getDocumentStatus(documentId: string): Promise<DocumentSta
 export async function queryChat(
   query: string, 
   documentIds: string[], 
-  sessionId?: string
+  sessionId?: string,
+  signal?: AbortSignal
 ): Promise<ChatQueryResponse> {
   const response = await fetch(`${BACKEND_BASE_URL}/chat/query`, {
     method: "POST",
@@ -115,6 +116,7 @@ export async function queryChat(
       document_ids: documentIds,
       session_id: sessionId || undefined,
     }),
+    signal,
   });
 
   if (!response.ok) {

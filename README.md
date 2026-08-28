@@ -32,14 +32,26 @@ Si quieres copiar este proyecto a otro ordenador (por ejemplo, mediante un pendr
 ### Paso 1: Copiar la carpeta y el archivo `.env`
 Copia la carpeta entera `MAIS_IA` al disco local del nuevo ordenador (se recomienda el Escritorio para mayor velocidad).
 > [!IMPORTANT]  
-> Asegúrate de que el archivo `.env` esté dentro de la carpeta `backend/`. Debe contener tu API Key de Groq, la configuración de puertos, tu token de Ngrok y el ID del canal de YouTube:
+> Asegúrate de que el archivo `.env` esté dentro de la carpeta `backend/`. Debe contener la configuración de puertos, tokens y claves de API de los proveedores de LLM:
 > ```env
 > POSTGRES_PORT=5433
 > REDIS_PORT=6380
 > CORS_ORIGINS=["http://localhost:3000", "http://localhost:8000", "https://maisformacion.com"]
-> GROQ_API_KEY=gsk_tu_clave_de_groq_aqui
 > NGROK_AUTHTOKEN=tu_token_de_ngrok_aqui
 > YOUTUBE_CHANNEL_ID=UCoZWQl3d034u8OIqnEGEnXA
+> 
+> # Claves de API de los proveedores de LLM (pueden coexistir en el archivo)
+> GROQ_API_KEY=gsk_tu_clave_de_groq_aqui
+> GEMINI_API_KEY=tu_clave_de_gemini_aqui
+> DEEPSEEK_API_KEY=tu_clave_de_deepseek_aqui
+> 
+> # Configuración del LLM activo
+> LLM_PROVIDER=gemini # Opciones: groq, gemini, deepseek
+> LLM_MODEL=gemini-3.6-flash # Ejemplos: openai/gpt-oss-120b (Groq), gemini-3.6-flash (Gemini), deepseek-chat (DeepSeek)
+> 
+> # NOTA DE SEGURIDAD: Google retira modelos antiguos periódicamente. 
+> # Antes de configurar LLM_MODEL para Gemini, comprueba la lista oficial de modelos vigentes en:
+> # https://ai.google.dev/gemini-api/docs/models?hl=es-419
 > ```
 
 ### Paso 2: Colocar Ngrok
