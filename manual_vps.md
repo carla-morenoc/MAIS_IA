@@ -194,6 +194,18 @@ Si hemos hecho cambios en la oficina y queremos subirlos a la web de producción
   cd /home/ubuntu/opt/maisito && sudo docker compose -f docker-compose.prod.yml restart backend celery_worker
   ```
 
+### Pregunta: "Maisito muestra el mensaje 'Lo siento, no puedo conectar con el servidor...' o la pantalla me habla de un error de CORS"
+* **¿A qué se debe?:** No es un problema de la web. Ocurre cuando el motor interno de Maisito (el backend) se ha apagado o no puede arrancar (por ejemplo, porque una clave de la IA expiró, cambió el modelo o la contraseña de la base de datos no coincide). Al estar apagado el motor, la web da ese aviso de desconexión.
+* **Solución rápida (en 2 pasos):**
+  1. Conéctate a la consola negra del servidor y mira cuál es el error exacto que ha apagado el motor ejecutando:
+     ```bash
+     cd /home/ubuntu/opt/maisito && sudo docker compose -f docker-compose.prod.yml logs --tail=30 backend
+     ```
+  2. Una vez corregido el dato en la libreta de claves (`.env`), despierta a Maisito para que vuelva a funcionar ejecutando:
+     ```bash
+     cd /home/ubuntu/opt/maisito && sudo docker compose -f docker-compose.prod.yml up -d
+     ```
+
 ### Pregunta: "Quiero ver qué está haciendo Maisito por dentro ahora mismo"
 * **Solución rápida:** Escribe esto en la consola negra para ver pasar en directo lo que piensa el backend:
   ```bash
