@@ -16,6 +16,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-MAIS_IA}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-MAIS_IA_secret}
       POSTGRES_DB: ${POSTGRES_DB:-MAIS_IA}
+      TZ: Europe/Madrid
     ports:
       - "${POSTGRES_PORT:-5433}:5432"
     volumes:
