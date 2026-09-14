@@ -1,204 +1,266 @@
-# Manual de indexación de videotutoriales de YouTube
+# Guia sencilla para indexar videotutoriales
 
-Este procedimiento permite indexar vídeos como videotutoriales, conservando los minutos de cada fragmento y el enlace para abrir YouTube en el momento exacto.
+Este manual explica como descargar la transcripcion de un video de YouTube desde Windows, subirla a Maisito y comprobar que ha terminado correctamente.
 
-## Qué no hay que hacer
+El proceso se hace **un video cada vez** para poder revisar facilmente el resultado.
 
-No utilizar el botón **Sincronizar** para indexar los vídeos mientras YouTube bloquee la IP del VPS. Ese botón intenta descargar las transcripciones desde el servidor y puede fallar.
+## Como funciona
 
-El procedimiento correcto es descargar cada transcripción desde el ordenador local y subirla después desde el formulario de la aplicación.
+1. Windows descarga la transcripcion del video en un archivo `.vtt`.
+2. Se sube ese archivo desde el panel de Maisito.
+3. Maisito lo divide en fragmentos de unos 30 segundos llamados `chunks`.
+4. Los fragmentos se guardan en la base de datos vectorial.
+5. El chat puede usar el contenido y abrir YouTube en el segundo exacto de cada cita.
 
-## 1. Descargar la transcripción desde Windows
+La descarga se hace desde tu ordenador porque YouTube puede bloquear la IP de la VPS.
 
-Abre **Símbolo del sistema** o **PowerShell** en Windows.
+## 1. Descargar el VTT desde Windows
 
-La primera vez instala `yt-dlp`:
+### Instalar yt-dlp
+
+Solo hay que hacerlo la primera vez. Abre **CMD** o PowerShell y ejecuta:
 
 ```cmd
 py -m pip install -U yt-dlp
 ```
 
-Descarga los subtítulos en español sustituyendo la URL por la del vídeo:
+### Descargar un video
+
+Puedes crear una carpeta para guardar las transcripciones:
 
 ```cmd
-py -m yt_dlp --skip-download --write-subs --write-auto-subs --sub-langs "es.*,es,en.*" --sub-format vtt -o "%(id)s.%(ext)s" "https://www.youtube.com/watch?v=ID_DEL_VIDEO"
+mkdir vtt_videos
+cd vtt_videos
+```
+
+En **CMD**, ejecuta todo el comando en una sola linea. Cambia la URL por la del video. Este comando descarga solo ese video:
+
+```cmd
+py -m yt_dlp --no-playlist --skip-download --write-subs --write-auto-subs --sub-langs "es.*,es,en.*" --sub-format vtt --ignore-errors -o "%(id)s.%(ext)s" "https://www.youtube.com/watch?v=ID_DEL_VIDEO"
 ```
 
 Ejemplo:
 
 ```cmd
-py -m yt_dlp --skip-download --write-subs --write-auto-subs --sub-langs "es.*,es,en.*" --sub-format vtt -o "%(id)s.%(ext)s" "https://www.youtube.com/watch?v=vazaOuqLBLM"
+py -m yt_dlp --no-playlist --skip-download --write-subs --write-auto-subs --sub-langs "es.*,es,en.*" --sub-format vtt --ignore-errors -o "%(id)s.%(ext)s" "https://www.youtube.com/watch?v=vazaOuqLBLM"
 ```
 
-El archivo se guarda en la carpeta actual. Si la consola muestra `C:\Users\carla\Desktop\MAIS_IA_copia>`, estará normalmente en:
+En **PowerShell**, puedes usar el mismo comando. Si lo escribes en varias lineas, usa el caracter de continuacion `` ` ``. No uses `` ` `` en CMD.
+
+El archivo tendra normalmente un nombre parecido a:
 
 ```text
-C:\Users\carla\Desktop\MAIS_IA_copia\ID_DEL_VIDEO.es.vtt
+vazaOuqLBLM.es.vtt
 ```
 
-Para localizarlo:
+Comprueba que se ha creado:
 
 ```cmd
-dir C:\Users\carla\Desktop\MAIS_IA_copia\*.vtt
+dir *.vtt
 ```
 
-Si aparecen varios archivos, utiliza el que termine en `.es.vtt`.
+Si hay varios idiomas, utiliza el archivo que termine en `.es.vtt`.
 
-Los avisos sobre JavaScript o el error 429 del idioma inglés no impiden continuar si se ha creado el archivo `.es.vtt`.
+### Avisos normales de yt-dlp
 
-## 2. Subir la transcripción a Maisito
+Estos avisos no son un problema si se crea el archivo `.vtt`:
 
-Abre:
+* Avisos sobre JavaScript o `EJS`.
+* Avisos sobre `impersonation`.
+* Error 429 para un idioma alternativo, si se ha descargado el `.es.vtt`.
 
-```text
-https://formacion.mais.es
-```
+Si termina con `Finished downloading` y existe el archivo `.vtt`, puedes continuar.
 
-En la columna izquierda, dentro de **Videotutoriales**, localiza **Importar transcripción con tiempos**.
+## 2. Subir un video a Maisito
 
-Rellena los campos:
+1. Abre [https://formacion.mais.es](https://formacion.mais.es).
+2. En la columna izquierda, localiza **Videotutoriales**.
+3. Busca el bloque **Importar transcripcion con tiempos**.
+4. Completa los campos:
 
-```text
-URL del vídeo: URL completa de YouTube
-Título: título visible del vídeo
-Archivo: archivo .es.vtt descargado
-```
+	* **URL del video de YouTube**: URL completa del video.
+	* **Titulo del video**: titulo que quieres ver en la lista.
+	* **Archivo**: el archivo `.es.vtt` descargado.
 
-Después pulsa **INDEXAR TRANSCRIPCIÓN**.
+5. Pulsa **Indexar transcripcion**.
 
-La aplicación puede mostrar temporalmente:
+No pulses **Sincronizar** para este procedimiento. Ese boton intenta descargar la transcripcion desde la VPS y YouTube puede bloquearla.
 
-```text
-Indexando...
-```
+## 3. Entender los estados
 
-Espera hasta que aparezca:
+En la lista de videotutoriales veras estos estados:
 
-```text
-X chunks
-```
+| Estado | Significado | Que hacer |
+|---|---|---|
+| `PENDING` | La transcripcion esta en la cola de Celery. | Esperar unos segundos y revisar. |
+| `PROCESSING` | El worker esta creando embeddings y guardando los chunks. | Esperar y consultar los logs si tarda demasiado. |
+| `COMPLETED` | La indexacion ha terminado correctamente. | Debe aparecer el numero de chunks. Probar una pregunta. |
+| `FAILED` | Ha ocurrido un error durante la indexacion. | Revisar el mensaje y los logs del worker. |
 
-Esto significa que la transcripción ha sido indexada correctamente.
+En la web, `PENDING` y `PROCESSING` aparecen como **Indexando...**. Cuando termina, aparece algo parecido a `25 chunks`.
 
-## 3. Comprobar que está indexado
+Un video esta listo cuando:
 
-También se puede comprobar desde el VPS. Entra por SSH:
+* aparece `COMPLETED`;
+* muestra un numero de chunks;
+* se puede seleccionar en la lista;
+* una pregunta sobre su contenido devuelve una cita roja con el minuto del video.
 
-```powershell
+## 4. Ver los logs del procesamiento
+
+Conectate a la VPS por SSH:
+
+```bash
 ssh ubuntu@57.131.148.194
 ```
 
-Ejecuta esta consulta, cambiando el texto por parte del título:
+Entra en la carpeta del proyecto:
 
 ```bash
-curl -s https://formacion.mais.es/api/v1/documents/ | python3 -c "import sys,json; d=json.load(sys.stdin); print([(x['filename'],x['status'],x['total_chunks'],x['error_message']) for x in d if 'Impuesto especial' in x['filename']])"
+cd /home/ubuntu/opt/maisito
 ```
 
-Resultado correcto:
+### Ver los logs en directo
+
+Este es el comando principal mientras subes un `.vtt`:
+
+```bash
+sudo docker compose -f docker-compose.prod.yml logs -f --tail=50 celery_worker
+```
+
+Para salir de los logs sin detener nada, pulsa `Ctrl+C`.
+
+### Ver solo los ultimos minutos
+
+```bash
+sudo docker compose -f docker-compose.prod.yml logs --since=10m celery_worker
+```
+
+### Comprobar que el worker esta encendido
+
+```bash
+sudo docker compose -f docker-compose.prod.yml ps celery_worker
+```
+
+Debe aparecer con estado `Up` o `running`.
+
+## 5. Comprobar el estado desde la VPS
+
+Para listar los videotutoriales y su estado:
+
+```bash
+curl -s https://formacion.mais.es/api/v1/documents/ | python3 -c "import sys,json; d=json.load(sys.stdin); print([(x['filename'],x['status'],x['total_chunks'],x['error_message']) for x in d if x.get('document_type') == 'youtube'])"
+```
+
+Para buscar un video concreto, cambia `TEXTO_DEL_TITULO`:
+
+```bash
+curl -s https://formacion.mais.es/api/v1/documents/ | python3 -c "import sys,json; d=json.load(sys.stdin); print([(x['filename'],x['status'],x['total_chunks'],x['error_message']) for x in d if 'TEXTO_DEL_TITULO'.lower() in x['filename'].lower()])"
+```
+
+Resultado correcto de ejemplo:
 
 ```text
-COMPLETED
+('Como hacer una factura', 'COMPLETED', 18, None)
 ```
 
-Además, `total_chunks` debe tener un número, no `null`.
+`total_chunks` debe tener un numero. Si aparece `null`, la indexacion aun no ha terminado o ha fallado.
 
-## 4. Probar el vídeo
+## 6. Que hacer si no termina
 
-1. En la lista de videotutoriales, espera a que aparezca con `X chunks`.
-2. Selecciona el vídeo si aparece como activo.
-3. Haz una pregunta concreta sobre su contenido.
-4. Pulsa una cita roja de la respuesta.
-5. YouTube debe abrirse en el minuto citado.
+### Se queda en `PENDING`
 
-## 5. Repetir el proceso con otros vídeos
-
-Para cada vídeo:
-
-1. Copiar su URL.
-2. Descargar su archivo `.vtt` desde Windows.
-3. Introducir URL y título en el formulario.
-4. Seleccionar el archivo `.es.vtt`.
-5. Pulsar **INDEXAR TRANSCRIPCIÓN**.
-6. Esperar a que aparezca `X chunks`.
-
-No es necesario borrar primero los vídeos que aparecen como `PENDING` o `FAILED`. Si se sube una transcripción usando la misma URL, el sistema reutiliza el registro del vídeo y lo vuelve a indexar.
-
-## 6. Errores habituales
-
-### `yt-dlp no se reconoce como comando`
-
-Usar siempre:
-
-```cmd
-py -m yt_dlp ...
-```
-
-No utilizar directamente `yt-dlp` si la carpeta de scripts de Python no está en el `PATH`.
-
-### No se crea ningún archivo `.vtt`
-
-El vídeo puede no tener subtítulos. Probar otro idioma disponible o elegir otro vídeo.
-
-### El vídeo permanece en `Indexando...`
-
-Comprobar el estado desde el VPS:
+Comprueba el worker:
 
 ```bash
-curl -s https://formacion.mais.es/api/v1/documents/ | python3 -c "import sys,json; d=json.load(sys.stdin); print([(x['filename'],x['status'],x['error_message']) for x in d if x['document_type']=='youtube'])"
+sudo docker compose -f docker-compose.prod.yml ps celery_worker
 ```
 
-Si el estado es `COMPLETED`, recargar la web con `Ctrl + F5`.
-
-Si el estado es `FAILED`, revisar `error_message`.
-
-### Aparece `YouTube is blocking requests from your IP`
-
-Ese error corresponde al método antiguo que descargaba desde el VPS. No pulsar **Sincronizar** y utilizar el procedimiento manual de este documento.
-
-### El estado es `PENDING` y no cambia
-
-Comprobar que el worker está iniciado:
+Si esta detenido, inicialo:
 
 ```bash
-sudo docker compose -f /home/ubuntu/docker-compose.prod.yml ps celery_worker
+sudo docker compose -f docker-compose.prod.yml start celery_worker
 ```
 
-Si está detenido:
+Despues vuelve a subir el `.vtt` desde el formulario.
+
+### Se queda en `PROCESSING`
+
+Mira los ultimos logs:
 
 ```bash
-sudo docker compose -f /home/ubuntu/docker-compose.prod.yml start celery_worker
+sudo docker compose -f docker-compose.prod.yml logs --tail=100 celery_worker
 ```
 
-Después volver a subir la transcripción desde el formulario.
+Si el worker sigue funcionando, espera. La creacion de embeddings puede tardar dependiendo de la longitud del video.
 
-## 7. Mantenimiento del sistema
+### Aparece `FAILED`
 
-Para ver los logs del worker:
+1. Ejecuta:
 
-```bash
-sudo docker compose -f /home/ubuntu/docker-compose.prod.yml logs -f --tail=50 celery_worker
-```
+	```bash
+	sudo docker compose -f docker-compose.prod.yml logs --tail=100 celery_worker
+	```
 
-Para salir de los logs sin detener el worker:
+2. Consulta el estado para leer `error_message`.
+3. Corrige el problema indicado.
+4. Vuelve a subir el mismo `.vtt` con la misma URL.
+
+Si usas la misma URL, Maisito reutiliza el registro del video y lo vuelve a indexar.
+
+### Error de YouTube o IP bloqueada
+
+No uses **Sincronizar**. Descarga el `.vtt` en Windows con `yt-dlp` y utiliza **Importar transcripcion con tiempos**.
+
+### El VTT no se acepta
+
+El archivo debe terminar en `.vtt` o `.txt` y tener marcas de tiempo. Un VTT valido contiene lineas parecidas a:
 
 ```text
-Ctrl+C
+00:00:00.000 --> 00:00:04.000
+Texto del video.
 ```
 
-Para detener el worker, sin borrar datos:
+## 7. Comprobar el resultado en la web
 
-```bash
-sudo docker compose -f /home/ubuntu/docker-compose.prod.yml stop celery_worker
-```
+Cuando aparezca `COMPLETED`:
 
-La IA seguirá funcionando con los vídeos que ya tengan vectores indexados, aunque el worker esté detenido.
+1. Recarga la pagina con `Ctrl+F5` si la lista no se actualiza.
+2. Comprueba que el video muestra `X chunks`.
+3. Verifica que esta activo y no aparece como `Inactivo`.
+4. Haz una pregunta concreta sobre el contenido.
+5. Pulsa una cita roja de la respuesta.
+6. Comprueba que YouTube se abre en el minuto citado.
 
-## Resumen rápido
+## 8. Repetir el proceso
+
+Para cada video:
+
+1. Copia su URL.
+2. Descarga su `.vtt` desde Windows.
+3. Introduce URL, titulo y archivo en Maisito.
+4. Pulsa **Indexar transcripcion**.
+5. Espera a `COMPLETED` y a que aparezca el numero de chunks.
+6. Prueba una pregunta.
+
+No borres el registro del video desde el icono de papelera salvo que quieras eliminarlo tambien del indice y del chat.
+
+## 9. Se pueden borrar los archivos `.vtt`?
+
+Si el video aparece como `COMPLETED` con chunks, puedes borrar el archivo `.vtt` de tu ordenador. Maisito ya ha guardado los fragmentos y no necesita el archivo original para responder.
+
+Conserva una copia si quieres poder reindexar el video en el futuro sin volver a descargarlo.
+
+No borres los volumenes Docker de PostgreSQL o Qdrant: contienen la informacion indexada de todos los videos.
+
+## Resumen rapido
 
 ```text
 Windows: descargar .vtt con py -m yt_dlp
-Web: introducir URL + título + archivo .vtt
-Web: pulsar INDEXAR TRANSCRIPCIÓN
-Esperar: X chunks
-Probar: cita roja -> YouTube en el minuto correspondiente
+Web: Videotutoriales -> Importar transcripcion con tiempos
+Web: introducir URL + titulo + archivo .vtt
+Web: pulsar Indexar transcripcion
+Esperar: PENDING -> PROCESSING -> COMPLETED
+VPS: revisar logs con docker compose logs -f celery_worker
+Probar: pregunta -> cita roja -> minuto exacto de YouTube
 ```
