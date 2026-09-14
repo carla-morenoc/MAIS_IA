@@ -1,0 +1,53 @@
+# ============================================================
+# MAIS_IA — Dockerfile del Worker Celery (Hardened)
+# Imagen dedicada para los workers de ingestión asíncrona.
+#
+# Seguridad aplicada:
+# - Proceso corre como usuario no-root 'appuser' (UID 1001)
+# - Directorio de uploads con ownership exclusivo de appuser
+# - Sin puertos expuestos (worker solo consume de Redis)
+# - Sin healthcheck HTTP (el worker no expone endpoints)
+# ============================================================
+
+# --- Stage 1: Dependencias ---
+FROM python:3.11-slim AS dependencies
+
+WORKDIR /tmp
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc libpq-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# --- Stage 2: Runtime ---
+FROM python:3.11-slim AS runtime
+
+# Crear usuario no-root antes de cualquier operación con archivos
+RUN groupadd --gid 1001 appgroup && \
+    useradd --uid 1001 --gid appgroup --shell /bin/sh --create-home appuser
+
+WORKDIR /app
+
+# Dependencias runtime mínimas para el worker (sin curl/healthcheck)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends libpq5 && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copiar dependencias pre-compiladas
+COPY --from=dependencies /install /usr/local
+
+# Copiar código fuente con ownership correcto
+COPY --chown=appuser:appgroup . .
+
+# Crear directorio de uploads con permisos para el worker
+RUN mkdir -p /app/uploads && chown -R appuser:appgroup /app/uploads
+
+# Cambiar al usuario no-root
+USER appuser
+
+# Ejecutar Celery worker con pool=solo para compatibilidad con asyncio
+# --max-tasks-per-child gestionado vía config, pero se puede sobreescribir aquí
+CMD ["celery", "-A", "app.workers.celery_app", "worker", \
+     "--loglevel=info", "--pool=solo", "--max-tasks-per-child=200"]
