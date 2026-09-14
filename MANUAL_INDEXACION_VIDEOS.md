@@ -253,10 +253,41 @@ Conserva una copia si quieres poder reindexar el video en el futuro sin volver a
 
 No borres los volumenes Docker de PostgreSQL o Qdrant: contienen la informacion indexada de todos los videos.
 
+## 10. Descargar todos los videos de una playlist
+
+Si tienes una playlist, puedes descargar automaticamente la transcripcion de todos sus videos. `yt-dlp` los procesa uno detras de otro y crea un archivo `.vtt` separado para cada video.
+
+En **CMD**, crea una carpeta y ejecuta el comando completo en una sola linea:
+
+```cmd
+mkdir vtt_playlist
+cd vtt_playlist
+py -m yt_dlp --yes-playlist --skip-download --write-subs --write-auto-subs --sub-langs "es.*,es" --sub-format vtt --convert-subs vtt --ignore-errors --no-overwrites -o "%(playlist_index)03d-%(id)s.%(ext)s" "URL_DE_LA_PLAYLIST"
+```
+
+Ejemplo:
+
+```cmd
+py -m yt_dlp --yes-playlist --skip-download --write-subs --write-auto-subs --sub-langs "es.*,es" --sub-format vtt --convert-subs vtt --ignore-errors --no-overwrites -o "%(playlist_index)03d-%(id)s.%(ext)s" "https://www.youtube.com/playlist?list=ID_DE_LA_PLAYLIST"
+```
+
+Se generaran archivos parecidos a estos:
+
+```text
+001-ID_VIDEO.es.vtt
+002-ID_VIDEO.es.vtt
+003-ID_VIDEO.es.vtt
+```
+
+Despues hay que subir cada `.vtt` individualmente en **Videotutoriales -> Importar transcripcion con tiempos** y esperar a que cada video llegue a `COMPLETED`.
+
+En CMD se usa `%`, no `%%`. Los dos porcentajes solo se usan si el comando se guarda dentro de un archivo `.bat`.
+
 ## Resumen rapido
 
 ```text
 Windows: descargar .vtt con py -m yt_dlp
+Playlist: usar --yes-playlist para generar un .vtt por video
 Web: Videotutoriales -> Importar transcripcion con tiempos
 Web: introducir URL + titulo + archivo .vtt
 Web: pulsar Indexar transcripcion
