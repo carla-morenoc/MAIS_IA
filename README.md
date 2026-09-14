@@ -29,10 +29,10 @@ Si quieres copiar este proyecto a otro ordenador (por ejemplo, mediante un pendr
 
 ## 📋 Pasos de Configuración en el Nuevo Ordenador
 
-### Paso 1: Copiar la carpeta y el archivo `.env`
+### Paso 1: Copiar la carpeta y los archivos `.env`
 Copia la carpeta entera `MAIS_IA` al disco local del nuevo ordenador (se recomienda el Escritorio para mayor velocidad).
 > [!IMPORTANT]  
-> Asegúrate de que el archivo `.env` esté dentro de la carpeta `backend/`. Debe contener la configuración de puertos, tokens y claves de API de los proveedores de LLM:
+> En producción hay dos archivos privados: `backend/.env` contiene la configuración del backend y la raíz `.env` debe contener `NEXT_PUBLIC_API_URL` para que el frontend conozca la URL pública de la API. Ninguno debe subirse a GitHub. El archivo `backend/.env` debe contener la configuración de puertos, tokens y claves de API de los proveedores de LLM:
 > ```env
 > POSTGRES_PORT=5433
 > REDIS_PORT=6380

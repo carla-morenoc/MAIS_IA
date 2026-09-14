@@ -24,7 +24,12 @@ Orquesta **7 contenedores Docker**:
 ---
 
 ## 2. Configuración del Entorno (`.env`)
-El archivo de entorno está localizado en el VPS en `/home/ubuntu/opt/maisito/backend/.env`.
+La producción utiliza dos archivos privados que no se suben a GitHub:
+
+* `/home/ubuntu/opt/maisito/backend/.env`: credenciales, base de datos, CORS y configuración del backend/worker.
+* `/home/ubuntu/opt/maisito/.env`: `NEXT_PUBLIC_API_URL`, utilizada por Docker Compose al compilar el frontend.
+
+El segundo archivo es necesario aunque el primero ya exista. Si falta, el frontend puede compilar apuntando por defecto a `http://localhost:8000`.
 
 ### Variables Críticas de Producción:
 * **`POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`**: Credenciales de la base de datos PostgreSQL (`MAIS_IA` / `MAIS_IA_secret`).
@@ -162,27 +167,23 @@ En la carpeta `/home/ubuntu/opt/maisito/backend/` hay un archivo de texto llamad
 
 ## 2. Cómo subir una actualización al servidor (Paso a Paso)
 
-Si hemos hecho cambios en la oficina y queremos subirlos a la web de producción para que los clientes vean las mejoras:
+El código se publica en GitHub y la VPS lo actualiza con Git. FileZilla solo se necesita para copiar los dos archivos `.env` privados la primera vez o para actualizar datos persistentes.
 
-1. **Empaquetar el código**: Genera el archivo comprimido `maisito.zip` (que tiene las carpetas `backend`, `frontend`, etc.).
-2. **Subir el archivo**: Abre un programa de transferencia como **FileZilla**, conéctate al servidor con la IP `57.131.148.194` usando tus credenciales de acceso, y arrastra el archivo `maisito.zip` a la carpeta `/home/ubuntu/opt/maisito/`.
-3. **Abrir la consola del servidor**: Conéctate al servidor mediante la consola negra (terminal) ejecutando en tu ordenador:
-   ```bash
-   ssh ubuntu@57.131.148.194
-   ```
-4. **Limpiar el código viejo**: Entra a la carpeta y borra los archivos viejos copiando y pegando este comando (y luego pulsa Enter):
-   ```bash
-   cd /home/ubuntu/opt/maisito && sudo rm -rf backend frontend docker docker-compose* README.md
-   ```
-5. **Descomprimir la actualización**: Extrae el contenido del zip copiando y pegando este comando:
-   ```bash
-   unzip maisito.zip && rm maisito.zip
-   ```
-6. **Aplicar los cambios**: Para que el ordenador de internet empiece a usar el nuevo código, ejecuta este comando:
-   ```bash
-   sudo docker compose -f docker-compose.prod.yml up -d --build backend celery_worker celery_beat
-   ```
-   *Esto apagará momentáneamente la versión anterior, leerá el nuevo código y encenderá la nueva versión en menos de un minuto.*
+1. **Conectarse por SSH**:
+  ```bash
+  ssh ubuntu@57.131.148.194
+  ```
+2. **Actualizar el código**:
+  ```bash
+  cd /home/ubuntu/opt/maisito
+  git pull origin main
+  ```
+3. **Reconstruir los servicios modificados**:
+  ```bash
+  sudo docker compose -f docker-compose.prod.yml up -d --build backend celery_worker celery_beat frontend
+  ```
+
+No subas `.env`, `backend/.env`, `backend/youtube_cookies.txt` ni `dump.sql` a GitHub. Si necesitas copiarlos con FileZilla, mantén los `.env` en sus rutas indicadas y las cookies en `backend/youtube_cookies.txt`.
 
 ---
 
