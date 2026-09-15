@@ -193,7 +193,7 @@ class LLMService:
             "model": groq_model,
             "messages": messages,
             "temperature": 0.1,
-            "max_tokens": 2048,
+            "max_tokens": 4096,
         }
         async with httpx.AsyncClient(timeout=30.0) as client:
             try:
@@ -262,7 +262,7 @@ class LLMService:
             "model": ds_model,
             "messages": messages,
             "temperature": 0.1,
-            "max_tokens": 2048,
+            "max_tokens": 4096,
         }
         
         async with httpx.AsyncClient(timeout=30.0) as client:

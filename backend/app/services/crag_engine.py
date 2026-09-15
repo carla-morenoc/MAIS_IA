@@ -152,8 +152,9 @@ class CRAGEngine:
             len(candidates_map)
         )
 
-        # Re-Ranking ejecutado en hilo secundario sobre todos los candidatos (recupera 12 para un contexto más rico)
-        top_chunks = await asyncio.to_thread(self.reranker.rerank, query, all_candidates, top_n=12)
+        top_chunks = await asyncio.to_thread(self.reranker.rerank, query, all_candidates, top_n=24)
+        if top_chunks and all(chunk.get("type") == "youtube" for chunk in top_chunks):
+            top_chunks = sorted(top_chunks, key=lambda chunk: chunk.get("page_number", 0))
         latencies["retrieval"] = round((time.perf_counter() - start_ret) * 1000, 2)
 
         # ── 2. Nodo: GRADE ─────────────────────────────────

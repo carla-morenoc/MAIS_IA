@@ -17,6 +17,7 @@ import logging
 import os
 import re
 import threading
+import gc
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
@@ -578,9 +579,6 @@ def process_youtube_transcript_task(self, document_id: str, transcript_text: str
                     chunk_index=chunk_index,
                 ))
 
-            texts = [chunk.text for chunk in chunks_data]
-            dense = generate_dense_embeddings(texts)
-            sparse = generate_sparse_embeddings(texts)
             from qdrant_client import models as qdrant_models
             client = get_qdrant_client()
             client.delete(
@@ -589,19 +587,35 @@ def process_youtube_transcript_task(self, document_id: str, transcript_text: str
                     key="doc_id", match=qdrant_models.MatchValue(value=document_id)
                 )]),
             )
-            points = [PointStruct(
-                id=str(uuid.uuid4()),
-                vector={"dense": dense_value, "sparse": SparseVector(
-                    indices=sparse_value["indices"], values=sparse_value["values"]
-                )},
-                payload={
-                    "doc_id": document_id, "filename": document.filename,
-                    "page_number": chunk.page_number, "chunk_index": chunk.chunk_index,
-                    "text": chunk.text, "type": "youtube",
-                    "video_id": document.file_path.split("v=")[-1].split("&")[0],
-                },
-            ) for chunk, dense_value, sparse_value in zip(chunks_data, dense, sparse, strict=True)]
-            client.upsert(collection_name=settings.qdrant_collection, points=points)
+
+            batch_size = 1
+            video_id = document.file_path.split("v=")[-1].split("&")[0]
+            for batch_start in range(0, len(chunks_data), batch_size):
+                chunk_batch = chunks_data[batch_start:batch_start + batch_size]
+                texts = [chunk.text for chunk in chunk_batch]
+                dense = generate_dense_embeddings(texts)
+                sparse = generate_sparse_embeddings(texts)
+                points = [PointStruct(
+                    id=str(uuid.uuid4()),
+                    vector={"dense": dense_value, "sparse": SparseVector(
+                        indices=sparse_value["indices"], values=sparse_value["values"]
+                    )},
+                    payload={
+                        "doc_id": document_id, "filename": document.filename,
+                        "page_number": chunk.page_number, "chunk_index": chunk.chunk_index,
+                        "text": chunk.text, "type": "youtube", "video_id": video_id,
+                    },
+                ) for chunk, dense_value, sparse_value in zip(chunk_batch, dense, sparse, strict=True)]
+                client.upsert(collection_name=settings.qdrant_collection, points=points)
+                logger.info(
+                    "Lote de vídeo procesado: chunks %d a %d de %d para %s",
+                    batch_start + 1,
+                    min(batch_start + batch_size, len(chunks_data)),
+                    len(chunks_data),
+                    document_id,
+                )
+                del texts, dense, sparse, points
+                gc.collect()
             document.status = DocumentStatus.COMPLETED
             document.total_chunks = len(chunks_data)
             document.error_message = None
