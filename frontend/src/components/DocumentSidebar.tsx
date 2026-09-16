@@ -23,6 +23,7 @@ interface DocumentSidebarProps {
 export default function DocumentSidebar({ onOpenDocument, onDocumentsChange }: DocumentSidebarProps) {
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [ocrEnabled, setOcrEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [documents, setDocuments] = useState<TrackedDocument[]>([]);
   const [pdfSearchTerm, setPdfSearchTerm] = useState("");
@@ -36,6 +37,18 @@ export default function DocumentSidebar({ onOpenDocument, onDocumentsChange }: D
       setWidth(parseInt(savedWidth, 10));
     }
   }, []);
+
+  useEffect(() => {
+    setOcrEnabled(localStorage.getItem("mais_pdf_ocr_enabled") === "true");
+  }, []);
+
+  const handleOcrToggle = () => {
+    setOcrEnabled((enabled) => {
+      const nextEnabled = !enabled;
+      localStorage.setItem("mais_pdf_ocr_enabled", String(nextEnabled));
+      return nextEnabled;
+    });
+  };
 
   const handleMouseMove = (mouseMoveEvent: MouseEvent) => {
     if (!isResizing.current) return;
@@ -302,7 +315,7 @@ export default function DocumentSidebar({ onOpenDocument, onDocumentsChange }: D
     setDocuments((prev) => [tempDoc, ...prev]);
 
     try {
-      const res = await uploadDocument(file);
+      const res = await uploadDocument(file, ocrEnabled);
       
       setDocuments((prev) => 
         prev.map(d => d.id === tempId ? {
@@ -395,6 +408,18 @@ export default function DocumentSidebar({ onOpenDocument, onDocumentsChange }: D
             <p className="text-xs text-zinc-500 mt-1">Arrastra y suelta aquí</p>
           </div>
         </div>
+        <button
+          type="button"
+          onClick={handleOcrToggle}
+          className={`mt-3 w-full rounded-lg border px-3 py-2 text-xs font-medium transition-colors cursor-pointer ${
+            ocrEnabled
+              ? "border-amber-500/50 bg-amber-950/30 text-amber-300"
+              : "border-zinc-800 bg-zinc-900/30 text-zinc-500 hover:text-zinc-300"
+          }`}
+          title="El OCR procesa páginas escaneadas y consume más CPU en el VPS"
+        >
+          OCR para PDFs escaneados: {ocrEnabled ? "Activado" : "Desactivado"}
+        </button>
         {error && (
           <p className="text-xs text-red-500 mt-3 flex items-center gap-1.5 bg-red-950/20 border border-red-900/50 p-2 rounded-lg">
             <AlertCircle className="h-3.5 w-3.5" />

@@ -90,7 +90,10 @@ def _ocr_single_image(args: tuple[int, np.ndarray]) -> tuple[int, str]:
         return (page_num, "")
 
 
-def _extract_pdf_pages_safe(file_path: str) -> tuple[list[tuple[int, str]], list[tuple[int, np.ndarray]]]:
+def _extract_pdf_pages_safe(
+    file_path: str,
+    ocr_enabled: bool = False,
+) -> tuple[list[tuple[int, str]], list[tuple[int, np.ndarray]]]:
     """
     Extrae texto e imágenes de forma thread-safe usando pypdfium2.
     El parsing C de PDFium se ejecuta secuencialmente (tarda < 0.05s en digital).
@@ -105,10 +108,11 @@ def _extract_pdf_pages_safe(file_path: str) -> tuple[list[tuple[int, str]], list
             text = textpage.get_text_range()
             if text and text.strip():
                 digital_pages.append((page_num, text.strip()))
-            else:
-                # OCR desactivado temporalmente para agilizar la ingestión.
-                # Las imágenes se ignoran en el índice pero el archivo original no se altera.
-                pass
+            elif ocr_enabled:
+                # Solo se rasterizan páginas sin texto cuando OCR está activado
+                # en la subida, evitando consumo extra de CPU y memoria por defecto.
+                bitmap = page.render(scale=2)
+                ocr_pages.append((page_num, bitmap.to_numpy().copy()))
         pdf_doc.close()
 
     return digital_pages, ocr_pages
@@ -120,7 +124,11 @@ def _extract_pdf_pages_safe(file_path: str) -> tuple[list[tuple[int, str]], list
     max_retries=3,
     default_retry_delay=10,
 )
-def process_pdf_task(self, document_id: str) -> dict[str, str | int]:  # noqa: ANN001
+def process_pdf_task(
+    self,
+    document_id: str,
+    ocr_enabled: bool = False,
+) -> dict[str, str | int]:  # noqa: ANN001
     """
     Procesa un documento PDF: extracción thread-safe, OCR paralelo, chunking,
     generación de embeddings y almacenamiento en Qdrant.
@@ -146,14 +154,18 @@ def process_pdf_task(self, document_id: str) -> dict[str, str | int]:  # noqa: A
             logger.info("Documento %s marcado como PROCESSING", document_id)
 
             # ── 2. Extracción de Páginas (Thread-Safe + OCR Paralelo) ──
-            digital_pages, ocr_pages = _extract_pdf_pages_safe(document.file_path)
+            digital_pages, ocr_pages = _extract_pdf_pages_safe(
+                document.file_path,
+                ocr_enabled=ocr_enabled,
+            )
             total_pages = len(digital_pages) + len(ocr_pages)
 
             logger.info(
-                "PDF '%s': %d páginas digitales, %d páginas requieren OCR",
+                "PDF '%s': %d páginas digitales, %d páginas requieren OCR%s",
                 document.filename,
                 len(digital_pages),
                 len(ocr_pages),
+                "" if ocr_enabled else " (OCR desactivado)",
             )
 
             pages_results: list[tuple[int, str]] = list(digital_pages)

@@ -173,6 +173,7 @@ async def upload_youtube_transcript(
 async def upload_document(
     request: Request,
     file: UploadFile,
+    ocr_enabled: bool = Form(False),
     session: AsyncSession = Depends(get_db_session),
 ) -> DocumentUploadResponse:
     """
@@ -224,11 +225,12 @@ async def upload_document(
     await session.commit()
 
     # ── Disparar tarea Celery ──────────────────────────────
-    process_pdf_task.delay(str(file_id))
+    process_pdf_task.delay(str(file_id), ocr_enabled=ocr_enabled)
     logger.info(
-        "Tarea de ingestión encolada para documento %s (%s)",
+        "Tarea de ingestión encolada para documento %s (%s, OCR: %s)",
         file_id,
         file.filename,
+        "activado" if ocr_enabled else "desactivado",
     )
 
     return DocumentUploadResponse(
