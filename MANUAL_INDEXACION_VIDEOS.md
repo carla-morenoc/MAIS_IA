@@ -150,7 +150,7 @@ Para listar los videotutoriales y su estado:
 
 ```bash
 curl -s https://formacion.mais.es/api/v1/documents/ | python3 -c "import sys,json; d=json.load(sys.stdin); print([(x['filename'],x['status'],x['total_chunks'],x['error_message']) for x in d if x.get('document_type') == 'youtube'])"
-```
+``` 
 
 Para buscar un video concreto, cambia `TEXTO_DEL_TITULO`:
 
@@ -166,8 +166,8 @@ Resultado correcto de ejemplo:
 
 `total_chunks` debe tener un numero. Si aparece `null`, la indexacion aun no ha terminado o ha fallado.
 
-## 6. Que hacer si no termina
-
+## 6. Que hacer si no terminavale tengo otra pregunta , tengo un video de muchisimos minutos 47 min. No se indexa bien ya que 
+vale tengo otra pregunta , tengo un video de muchisimos minutos 47 min. No se indexa bien ya que 
 ### Se queda en `PENDING`
 
 Comprueba el worker:
