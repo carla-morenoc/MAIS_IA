@@ -29,7 +29,7 @@ La producción utiliza dos archivos privados que no se suben a GitHub:
 * `/home/ubuntu/opt/maisito/backend/.env`: credenciales, base de datos, CORS y configuración del backend/worker.
 * `/home/ubuntu/opt/maisito/.env`: `NEXT_PUBLIC_API_URL`, utilizada por Docker Compose al compilar el frontend.
 
-El segundo archivo es necesario aunque el primero ya exista. Si falta, el frontend puede compilar apuntando por defecto a `http://localhost:8000`.
+El segundo archivo es recomendable aunque exista un valor de respaldo para producción. Si se configura, `NEXT_PUBLIC_API_URL` debe incluir el prefijo `/api/v1` (por ejemplo, `https://formacion.mais.es/api/v1`). Si falta, Compose usa esa URL pública como respaldo; si cambia el dominio, actualiza la variable antes de reconstruir el frontend.
 
 ### Variables Críticas de Producción:
 * **`POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`**: Credenciales de la base de datos PostgreSQL (`MAIS_IA` / `MAIS_IA_secret`).

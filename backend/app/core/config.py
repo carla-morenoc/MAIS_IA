@@ -31,8 +31,10 @@ class Settings(BaseSettings):
     api_version: str = "0.1.0"
     api_debug: bool = False
     cors_origins: list[str] = [
+        "http://localhost",
         "http://localhost:3000",
         "http://localhost:8000",
+        "http://127.0.0.1",
     ]
 
     # ── PostgreSQL ─────────────────────────────────────────
@@ -81,7 +83,7 @@ class Settings(BaseSettings):
 
     # ── Reranker ───────────────────────────────────────────
     reranker_model: str = "BAAI/bge-reranker-base"
-    crag_relevance_threshold: float = 0.10
+    crag_relevance_threshold: float = 0.35
 
     # ── LLM ────────────────────────────────────────────────
     llm_provider: str = "groq"

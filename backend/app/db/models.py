@@ -206,3 +206,33 @@ class ChatMessage(Base):
 
     def __repr__(self) -> str:
         return f"<ChatMessage(id={self.id}, session_id={self.session_id!r}, role={self.role!r})>"
+
+
+class MoodEntry(Base):
+    """Entrada privada del diario emocional de la pareja."""
+
+    __tablename__ = "mood_entries"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    mood: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        comment="Ánimo indicado, de 1 (difícil) a 5 (muy bien)",
+    )
+    note: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        comment="Texto del diario escrito por la persona usuaria",
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    def __repr__(self) -> str:
+        return f"<MoodEntry(id={self.id}, mood={self.mood})>"

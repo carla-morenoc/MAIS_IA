@@ -17,7 +17,10 @@ import { getDocumentFileUrl } from "../lib/api";
 
 // Configurar el worker de PDF.js solo en entorno cliente
 if (typeof window !== "undefined") {
-  pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+  pdfjs.GlobalWorkerOptions.workerSrc =
+    process.env.NODE_ENV === "production"
+      ? "/pdf.worker.min.mjs"
+      : `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 }
 
 interface PdfViewerProps {
@@ -72,7 +75,8 @@ export default function PdfViewer({
       .catch((err) => {
         if (!active) return;
         console.error("Error al cargar PDF con PDF.js:", err);
-        setError("No se pudo cargar el archivo PDF.");
+        const detail = err instanceof Error ? err.message : String(err);
+        setError(`No se pudo cargar el archivo PDF. ${detail}`);
         setLoading(false);
       });
 
