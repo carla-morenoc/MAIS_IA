@@ -68,7 +68,7 @@ export interface HealthResponse {
 /**
  * Sube un archivo PDF al backend para procesamiento asíncrono.
  */
-export async function uploadDocument(file: File, ocrEnabled = false): Promise<DocumentUploadResponse> {
+export async function uploadDocument(file: File, ocrEnabled = true): Promise<DocumentUploadResponse> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("ocr_enabled", String(ocrEnabled));

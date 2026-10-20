@@ -23,7 +23,7 @@ interface DocumentSidebarProps {
 export default function DocumentSidebar({ onOpenDocument, onDocumentsChange }: DocumentSidebarProps) {
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [ocrEnabled, setOcrEnabled] = useState(false);
+  const [ocrEnabled, setOcrEnabled] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [documents, setDocuments] = useState<TrackedDocument[]>([]);
   const [pdfSearchTerm, setPdfSearchTerm] = useState("");
@@ -39,7 +39,8 @@ export default function DocumentSidebar({ onOpenDocument, onDocumentsChange }: D
   }, []);
 
   useEffect(() => {
-    setOcrEnabled(localStorage.getItem("mais_pdf_ocr_enabled") === "true");
+    const savedOcrSetting = localStorage.getItem("mais_pdf_ocr_enabled");
+    setOcrEnabled(savedOcrSetting === null || savedOcrSetting === "true");
   }, []);
 
   const handleOcrToggle = () => {

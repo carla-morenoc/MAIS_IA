@@ -12,10 +12,12 @@ import logging
 import uuid
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.app_security.rate_limit import limiter
+from app.db.models import ChatSuggestion
 from app.db.postgres import get_db_session
 from app.services.chat_service import (
     delete_session_history,
@@ -104,6 +106,20 @@ class FAQItem(BaseModel):
     desc: str = Field(..., description="Breve descripción orientativa o explicativa del tema")
 
 
+class ChatSuggestionRequest(BaseModel):
+    """Datos que envía el formulario de sugerencias del chat."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    company: str = Field(..., min_length=1, max_length=255)
+    suggestion: str = Field(..., min_length=1, max_length=5000)
+    session_id: str = Field(..., min_length=1, max_length=64)
+
+
+class ChatSuggestionResponse(BaseModel):
+    message: str
+
+
 import time
 import json
 from app.services.llm import LLMService
@@ -115,6 +131,32 @@ class FAQsCache:
 
 
 # ── Endpoints ──────────────────────────────────────────────
+
+
+@router.post(
+    "/suggestions",
+    response_model=ChatSuggestionResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Enviar una sugerencia sobre el asistente",
+)
+@limiter.limit("5/minute")
+async def create_chat_suggestion(
+    request: Request,
+    payload: ChatSuggestionRequest,
+    db: AsyncSession = Depends(get_db_session),
+) -> ChatSuggestionResponse:
+    """Guarda la empresa y la sugerencia en PostgreSQL."""
+    suggestion = ChatSuggestion(
+        session_id=payload.session_id,
+        company=payload.company,
+        suggestion=payload.suggestion,
+    )
+    db.add(suggestion)
+    await db.commit()
+    logger.info("Sugerencia recibida para la sesión %s", payload.session_id)
+    return ChatSuggestionResponse(
+        message="¡Gracias por tu sugerencia! Ya puedes hacer otra consulta cuando quieras.",
+    )
 
 
 @router.post(

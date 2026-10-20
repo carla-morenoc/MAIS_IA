@@ -173,7 +173,7 @@ async def upload_youtube_transcript(
 async def upload_document(
     request: Request,
     file: UploadFile,
-    ocr_enabled: bool = Form(False),
+    ocr_enabled: bool = Form(True),
     session: AsyncSession = Depends(get_db_session),
 ) -> DocumentUploadResponse:
     """
@@ -606,4 +606,3 @@ async def sync_youtube_videos(
         process_youtube_video_task.delay(document_id)
 
     return {"status": "success", "message": f"Se han encolado {added_count} nuevos vídeos.", "added": added_count}
-

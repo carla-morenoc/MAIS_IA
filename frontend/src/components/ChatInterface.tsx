@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { Send, Bot, User, Sparkles, AlertCircle, FileText, ChevronDown, ChevronUp, Loader2, Play, ExternalLink, PlusCircle, RotateCcw } from "lucide-react";
+import { Send, Bot, User, Sparkles, AlertCircle, FileText, Loader2, Play, ExternalLink, PlusCircle, RotateCcw } from "lucide-react";
 import { queryChat, getChatHistory, ChatQueryResponse, SourceDocument, getPopularQuestions, FAQItem } from "../lib/api";
 import { TrackedDocument } from "./DocumentSidebar";
 import LatencyDisplay from "./LatencyDisplay";
@@ -45,7 +45,6 @@ export default function ChatInterface({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [openSourcesIdx, setOpenSourcesIdx] = useState<number | null>(null);
   const [faqs, setFaqs] = useState<FAQItem[]>([]);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -204,7 +203,7 @@ export default function ChatInterface({
     }
   };
 
-  const openYoutubeUrl = (videoIdOrDocId: string, seconds: number, filename?: string) => {
+  const getYoutubeUrl = (videoIdOrDocId: string, seconds: number, filename?: string) => {
     let ytUrl = "";
     const youtubeIdPattern = /^[A-Za-z0-9_-]{11}$/;
     if (videoIdOrDocId && youtubeIdPattern.test(videoIdOrDocId)) {
@@ -223,9 +222,12 @@ export default function ChatInterface({
         ytUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(filename)}`;
       }
     }
-    if (ytUrl) {
-      window.open(ytUrl, "_blank");
-    }
+    return ytUrl;
+  };
+
+  const openYoutubeUrl = (videoIdOrDocId: string, seconds: number, filename?: string) => {
+    const ytUrl = getYoutubeUrl(videoIdOrDocId, seconds, filename);
+    if (ytUrl) window.open(ytUrl, "_blank", "noopener,noreferrer");
   };
 
   const parseTimeToSeconds = (timeStr: string): number => {
@@ -257,12 +259,13 @@ export default function ChatInterface({
     if (!text) return [];
     
     // Regex tolerante a formatos de tiempo: min. MM:SS, seg. X, o MM:SS
-    const citationRegex = /\[([^\]\n]+?\.pdf)(?:[,\s]*(?:pág|pag|página|pagina|p)\.?\s*(\d+))?\]|\[Video:\s*([^,\n]+?),\s*(?:min\.|minuto|min|seg\.|segundo|seg|s)?\s*(\d+(?::\d+){0,2})\]/gi;
+    const citationRegex = /[\[\u3010\uFF3B]([^\]\u3011\uFF3D\n]+?\.pdf)(?:[,\s]*(?:pág|pag|página|pagina|p)\.?\s*(\d+))?[\]\u3011\uFF3D]|[\[\u3010\uFF3B]Video:\s*([^,\n\]\u3011\uFF3D]+?),\s*(?:min\.|minuto|min|seg\.|segundo|seg|s)?\s*(\d+(?::\d+){0,2})[\]\u3011\uFF3D]/gi;
     const parts: React.ReactNode[] = [];
     let lastIndex = 0;
     let match: RegExpExecArray | null;
 
-    const normalizeName = (n: string) => n.toLowerCase().replace(/[\+_\s\(\)\[\]\-]/g, "");
+    const normalizeName = (n: string) =>
+      n.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
     while ((match = citationRegex.exec(text)) !== null) {
       const matchIndex = match.index;
@@ -276,70 +279,75 @@ export default function ChatInterface({
       const rawTimeStr = isYt ? match[4] : (match[2] || "1");
       const pageNumber = isYt ? parseTimeToSeconds(rawTimeStr) : (parseInt(rawTimeStr, 10) || 1);
       const timeFormatted = isYt ? formatSecondsToTime(pageNumber) : "";
-      const displayCitationText = isYt ? `[Video: ${filename}, min. ${timeFormatted}]` : match[0];
+      const displayCitationText = isYt
+        ? `[Video: ${filename}, min. ${timeFormatted}]`
+        : `[${filename}, pág. ${pageNumber}]`;
 
-      let matchingSource = sources?.find((src) => {
-        if (isYt) {
-          return src.type === "youtube" && src.filename.toLowerCase().includes(filename.toLowerCase());
-        }
-        return src.filename.toLowerCase() === filename.toLowerCase();
+      const sourceType = isYt ? "youtube" : "pdf";
+      const matchingSources = (sources || []).filter((src) => (src.type || "pdf") === sourceType);
+      const normalizedFilename = normalizeName(filename);
+      const exactSources = matchingSources.filter(
+        (src) => normalizeName(src.filename) === normalizedFilename
+      );
+      const partialSources = matchingSources.filter((src) => {
+        const sourceName = normalizeName(src.filename);
+        return sourceName.length >= 4 && normalizedFilename.length >= 4 &&
+          (sourceName.includes(normalizedFilename) || normalizedFilename.includes(sourceName));
       });
+      const sourceCandidates = exactSources.length > 0 ? exactSources : partialSources;
+      const uniqueSources = [...new Map(sourceCandidates.map((src) => [src.doc_id, src])).values()];
+      const uniqueTypeSources = [...new Map(matchingSources.map((src) => [src.doc_id, src])).values()];
+      const matchingSource = uniqueSources.length === 1
+        ? uniqueSources[0]
+        : uniqueSources.length === 0 && uniqueTypeSources.length === 1
+          ? uniqueTypeSources[0]
+          : undefined;
 
-      if (!matchingSource) {
-        const normCitation = normalizeName(filename);
-        matchingSource = sources?.find((src) => {
-          if (isYt) {
-            return src.type === "youtube";
-          }
-          const normSrc = normalizeName(src.filename);
-          return normSrc === normCitation || normSrc.includes(normCitation) || normCitation.includes(normSrc);
-        });
-      }
-
-      if (!matchingSource && sources && sources.length > 0) {
-        matchingSource = isYt
-          ? sources.find((src) => src.type === "youtube")
-          : sources.find((src) => src.type !== "youtube");
-      }
-
-      let docId = matchingSource?.doc_id || "";
-      let targetFilename = matchingSource?.filename || filename;
+      const matchingDocuments = (selectedDocuments || []).filter(
+        (doc) => ((doc.document_type || "pdf") === "youtube" ? "youtube" : "pdf") === sourceType
+      );
+      const exactDocuments = matchingDocuments.filter(
+        (doc) => normalizeName(doc.filename) === normalizedFilename
+      );
+      const partialDocuments = matchingDocuments.filter((doc) => {
+        const documentName = normalizeName(doc.filename);
+        return documentName.length >= 4 && normalizedFilename.length >= 4 &&
+          (documentName.includes(normalizedFilename) || normalizedFilename.includes(documentName));
+      });
+      const documentCandidates = exactDocuments.length > 0 ? exactDocuments : partialDocuments;
+      const uniqueDocuments = [...new Map(documentCandidates.map((doc) => [doc.id, doc])).values()];
+      const uniqueTypeDocuments = [...new Map(matchingDocuments.map((doc) => [doc.id, doc])).values()];
+      const matchingDocument = uniqueDocuments.length === 1
+        ? uniqueDocuments[0]
+        : uniqueDocuments.length === 0 && uniqueTypeDocuments.length === 1
+          ? uniqueTypeDocuments[0]
+          : undefined;
+      const docId = matchingSource?.doc_id || matchingDocument?.id;
+      const targetFilename = matchingSource?.filename || matchingDocument?.filename || filename;
       const snippetText = matchingSource?.snippet ? matchingSource.snippet.slice(0, 50) : undefined;
       const videoId = matchingSource?.video_id;
 
-      if (!docId && selectedDocuments && selectedDocuments.length > 0) {
-        const normCitation = normalizeName(filename);
-        const foundDoc = selectedDocuments.find((d) => {
-          const normDoc = normalizeName(d.filename);
-          return normDoc === normCitation || normDoc.includes(normCitation) || normCitation.includes(normDoc);
-        });
-        if (foundDoc) {
-          docId = foundDoc.id;
-          targetFilename = foundDoc.filename;
-        } else {
-          const firstPdf = selectedDocuments.find(d => (d.document_type || "pdf") === "pdf");
-          if (firstPdf) {
-            docId = firstPdf.id;
-            targetFilename = firstPdf.filename;
-          }
-        }
-      }
-      if (!docId && selectedDocIds.length > 0) {
-        docId = selectedDocIds[0];
+      if (!docId) {
+        parts.push(match[0]);
+        lastIndex = citationRegex.lastIndex;
+        continue;
       }
 
       if (isYt) {
+        const youtubeUrl = getYoutubeUrl(videoId || docId, pageNumber, targetFilename);
         parts.push(
-          <button
+          <a
             key={`cite-${matchIndex}`}
-            onClick={() => openYoutubeUrl(videoId || docId, pageNumber, targetFilename)}
+            href={youtubeUrl}
+            target="_blank"
+            rel="noopener noreferrer"
             className="px-2 py-0.5 mx-1 rounded-md bg-red-600/90 hover:bg-red-500 active:bg-red-700 text-white font-semibold text-xs transition-all duration-150 cursor-pointer inline-flex items-center gap-1.5 focus:outline-none shadow-sm hover:shadow-red-500/20 border border-red-400/30"
             title={`Abrir vídeo en YouTube en el minuto ${timeFormatted}`}
           >
             <Play className="h-3.5 w-3.5 shrink-0 text-red-200" />
             <span>{displayCitationText}</span>
             <ExternalLink className="h-2.5 w-2.5 opacity-70" />
-          </button>
+          </a>
         );
       } else {
         parts.push(
@@ -369,6 +377,49 @@ export default function ChatInterface({
     return parts;
   };
 
+  const parseLinksAndCitations = (
+    text: string,
+    sources?: SourceDocument[]
+  ): React.ReactNode[] => {
+    const linkRegex = /\[\[([^\]\n]+)\]\]\((https?:\/\/[^\s)]+)\)|\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<]+)/gi;
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = linkRegex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(...parseCitations(text.slice(lastIndex, match.index), sources));
+      }
+
+      const label = (match[1] || match[3] || match[5] || "")
+        .replace(/^[\[【［]|[\]】］]$/g, "");
+      const matchedUrl = match[2] || match[4] || match[5] || "";
+      const url = match[5] ? matchedUrl.replace(/[.,!?;:]+$/, "") : matchedUrl;
+      const trailingPunctuation = match[5] ? matchedUrl.slice(url.length) : "";
+      parts.push(
+        <a
+          key={`link-${match.index}`}
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-300 underline decoration-blue-400/50 underline-offset-2 hover:text-blue-200 break-all"
+        >
+          {label}
+          <ExternalLink className="ml-1 inline h-3 w-3" />
+        </a>
+      );
+      if (trailingPunctuation) {
+        parts.push(trailingPunctuation);
+      }
+      lastIndex = linkRegex.lastIndex;
+    }
+
+    if (lastIndex < text.length) {
+      parts.push(...parseCitations(text.slice(lastIndex), sources));
+    }
+    return parts;
+  };
+
   const parseBoldText = (text: string, sources?: SourceDocument[]): React.ReactNode[] => {
     const parts = text.split(/(\*\*.*?\*\*)/g);
     const result: React.ReactNode[] = [];
@@ -376,7 +427,7 @@ export default function ChatInterface({
     parts.forEach((part, index) => {
       if (part.startsWith("**") && part.endsWith("**")) {
         const boldInner = part.slice(2, -2);
-        const parsedInner = parseCitations(boldInner, sources);
+        const parsedInner = parseLinksAndCitations(boldInner, sources);
 
         result.push(
           <strong key={`bold-${index}`} className="font-extrabold text-zinc-50">
@@ -384,7 +435,7 @@ export default function ChatInterface({
           </strong>
         );
       } else if (part) {
-        const parsed = parseCitations(part, sources);
+        const parsed = parseLinksAndCitations(part, sources);
         result.push(...parsed);
       }
     });
@@ -418,12 +469,12 @@ export default function ChatInterface({
     lines.forEach((line) => {
       const trimmedLine = line.trim();
       
-      const isNumbered = /^\d+\.\s(.*)/.exec(trimmedLine);
+      const isNumbered = /^(?:(\d+)\.\s*|([1-9]\uFE0F?\u20E3)\s*)(.+)$/.exec(trimmedLine);
       const isBullet = /^[-*]\s(.*)/.exec(trimmedLine);
 
       if (isNumbered) {
         flushList();
-        const content = isNumbered[1];
+        const content = isNumbered[3];
 
         formattedElements.push(
           <div
@@ -431,7 +482,7 @@ export default function ChatInterface({
             className="flex gap-2 pl-2 my-2 leading-relaxed text-zinc-300"
           >
             <span className="font-bold text-blue-400 shrink-0">
-              {trimmedLine.split(".")[0]}.
+              {isNumbered[1] ? `${isNumbered[1]}.` : isNumbered[2]}
             </span>
             <span className="flex-1">
               {parseBoldText(content, sources)}
@@ -608,91 +659,6 @@ export default function ChatInterface({
                     />
                   )}
 
-                  {/* Fuentes y Citas */}
-                  {isBot && msg.sources && msg.sources.length > 0 && (
-                    <div className="border border-zinc-800/60 rounded-xl bg-zinc-950/20 overflow-hidden text-xs">
-
-                      <button
-                        onClick={() =>
-                          setOpenSourcesIdx(
-                            openSourcesIdx === index ? null : index
-                          )
-                        }
-                        className="w-full flex items-center justify-between p-3 text-zinc-400 hover:text-zinc-200 transition-colors"
-                      >
-                        <span className="flex items-center gap-1.5 font-medium">
-                          <FileText className="h-3.5 w-3.5 text-blue-400" />
-                          Fuentes utilizadas ({msg.sources.length})
-                        </span>
-
-                        {openSourcesIdx === index ? (
-                          <ChevronUp className="h-4 w-4" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4" />
-                        )}
-                      </button>
-
-                      {openSourcesIdx === index && (
-                        <div className="border-t border-zinc-850 p-4 space-y-3 bg-zinc-950/40">
-
-                          {msg.sources.map((src, sIdx) => {
-                            const isSourceYt = src.type === "youtube";
-                            return (
-                              <div
-                                key={sIdx}
-                                className="bg-zinc-900/30 border border-zinc-800/40 rounded-xl p-3"
-                              >
-                                <div className="flex items-center justify-between text-zinc-400 font-semibold text-[10px] mb-2">
-
-                                  {isSourceYt ? (
-                                    <button
-                                      onClick={() =>
-                                        openYoutubeUrl(
-                                          src.video_id || src.doc_id,
-                                          src.page_number,
-                                          src.filename
-                                        )
-                                      }
-                                      className="truncate max-w-[70%] hover:text-red-400 hover:underline text-left cursor-pointer transition-colors inline-flex items-center gap-1.5 text-red-300"
-                                      title={`Abrir vídeo en YouTube en el segundo ${src.page_number}`}
-                                    >
-                                      <Play className="h-3 w-3 text-red-400 shrink-0" />
-                                      <span className="truncate">{src.filename} (seg. {src.page_number})</span>
-                                      <ExternalLink className="h-2.5 w-2.5 opacity-70 shrink-0" />
-                                    </button>
-                                  ) : (
-                                    <button
-                                      onClick={() =>
-                                        onOpenPdf(
-                                          src.doc_id,
-                                          src.filename,
-                                          src.page_number
-                                        )
-                                      }
-                                      className="truncate max-w-[70%] hover:text-blue-400 hover:underline text-left cursor-pointer transition-colors inline-flex items-center gap-1.5"
-                                      title="Ver esta página en el visor"
-                                    >
-                                      <FileText className="h-3 w-3 text-blue-400 shrink-0" />
-                                      <span className="truncate">{src.filename} (pág. {src.page_number})</span>
-                                    </button>
-                                  )}
-
-                                  <span className="text-blue-400 font-mono">
-                                    Rerank: {src.score}
-                                  </span>
-                                </div>
-
-                                <p className="text-[11px] text-zinc-500 leading-relaxed italic bg-zinc-950/10 p-2 rounded-lg border border-zinc-900/40">
-                                  "{src.snippet}"
-                                </p>
-                              </div>
-                            );
-                          })}
-
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
 
                 {/* Avatar del Usuario */}

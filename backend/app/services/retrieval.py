@@ -92,7 +92,16 @@ async def hybrid_search(
             )
         )
 
-    if source_type:
+    if source_type == "pdf":
+        # Los PDFs ya indexados no almacenan el campo "type"; se distinguen
+        # de los vídeos excluyendo explícitamente los puntos youtube.
+        must_not_conditions.append(
+            models.FieldCondition(
+                key="type",
+                match=models.MatchValue(value="youtube"),
+            )
+        )
+    elif source_type:
         must_conditions.append(
             models.FieldCondition(
                 key="type",
@@ -168,12 +177,78 @@ async def hybrid_search(
     return results
 
 
+async def get_pdf_page_chunks(
+    page_refs: list[tuple[str, int]],
+    limit_per_page: int = 64,
+) -> list[dict]:
+    """Recupera en orden todos los fragmentos de las páginas PDF relevantes."""
+    if not page_refs:
+        return []
+
+    client = get_async_qdrant_client()
+    unique_refs = list(dict.fromkeys(page_refs))
+
+    async def fetch_page(doc_id: str, page_number: int) -> list[dict]:
+        scroll_filter = models.Filter(
+            must=[
+                models.FieldCondition(
+                    key="doc_id",
+                    match=models.MatchValue(value=str(doc_id)),
+                ),
+                models.FieldCondition(
+                    key="page_number",
+                    match=models.MatchValue(value=page_number),
+                ),
+            ]
+        )
+        points, offset = await client.scroll(
+            collection_name=settings.qdrant_collection,
+            scroll_filter=scroll_filter,
+            limit=limit_per_page,
+            with_payload=True,
+            with_vectors=False,
+        )
+        chunks = []
+        while True:
+            for point in points:
+                payload = point.payload or {}
+                chunks.append({
+                    "id": point.id,
+                    "score": 0.0,
+                    "text": payload.get("text", ""),
+                    "doc_id": payload.get("doc_id", ""),
+                    "filename": payload.get("filename", ""),
+                    "page_number": payload.get("page_number", page_number),
+                    "chunk_index": payload.get("chunk_index", 0),
+                    "type": payload.get("type", "pdf"),
+                    "video_id": payload.get("video_id"),
+                    "rerank_score": 0.0,
+                })
+            if offset is None:
+                break
+            points, offset = await client.scroll(
+                collection_name=settings.qdrant_collection,
+                scroll_filter=scroll_filter,
+                limit=limit_per_page,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+        return sorted(chunks, key=lambda chunk: chunk["chunk_index"])
+
+    page_chunks = await asyncio.gather(
+        *(fetch_page(doc_id, page_number) for doc_id, page_number in unique_refs)
+    )
+    return [chunk for chunks in page_chunks for chunk in chunks]
+
+
 _QUERY_STOP_WORDS = {
     "a", "al", "como", "con", "cual", "cuales", "de", "del", "el", "en",
     "es", "hacer", "hago", "la", "las", "lo", "los", "me", "para", "por",
     "que", "se", "un", "una", "y", "crear", "creo", "crea", "crear", "crear",
-    "dime", "explica", "explicame", "necesito", "quiero", "puedo", "puedes",
+    "dime", "explica", "explicame", "necesito", "quiero", "puedo", "puedes", "hago",
     "realizar", "realizo", "realiza", "usar", "uso", "utilizar", "utilizo",
+    "documento", "documentos",
 }
 
 _VIDEO_TERM_ALIASES = {
@@ -310,9 +385,8 @@ async def lexical_video_search(
         if not isinstance(exact_terms, set) or not isinstance(title_terms, set) or not isinstance(exact_chunks, int):
             continue
         chunk["video_title_score"] = len(title_terms)
-        # No se puede escoger un tutorial entero porque una palabra aparezca
-        # una sola vez fuera de contexto. Debe estar en el título o repetirse
-        # en varios tramos de la transcripción.
+        # Una mención aislada en un vídeo largo no basta para bloquear el PDF
+        # de respaldo: debe aparecer en el título o repetirse en la transcripción.
         if not title_terms and exact_chunks < 2:
             chunk["video_score"] = 0
             continue
@@ -447,4 +521,3 @@ async def get_video_neighbour_chunks(
             }
 
     return sorted(by_id.values(), key=lambda chunk: chunk["chunk_index"])
-

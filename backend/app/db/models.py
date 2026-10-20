@@ -208,6 +208,36 @@ class ChatMessage(Base):
         return f"<ChatMessage(id={self.id}, session_id={self.session_id!r}, role={self.role!r})>"
 
 
+class ChatSuggestion(Base):
+    """Sugerencia enviada por un usuario cuando el asistente no encuentra respuesta."""
+
+    __tablename__ = "chat_suggestions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    session_id: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        index=True,
+    )
+    company: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+    suggestion: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
 class MoodEntry(Base):
     """Entrada privada del diario emocional de la pareja."""
 
